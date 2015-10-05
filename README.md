@@ -5,3 +5,5 @@ interfacing the RFM69
 controlling remote control sockets
 usage example:
 sudo intertechno.py 0000F0000FFF
+##lacrosse.py
+receiving temperature sensors
