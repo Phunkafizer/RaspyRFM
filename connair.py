@@ -1,8 +1,10 @@
+#!/usr/bin/env python2.7
+
 import socket
 
 UDP_IP = "0.0.0.0"
 UDP_PORT = 49880
-HELLO_MESSAGE = "HCGW:VC:Seegel Systeme;MC:RaspyRFM;FW:1.00;IP:192.168.2.125;;"
+HELLO_MESSAGE = "HCGW:VC:Seegel Systeme;MC:RaspyRFM;FW:1.00;IP:192.168.2.124;;"
 
 sock = socket.socket(socket.AF_INET, # Internet
                      socket.SOCK_DGRAM) # UDP
