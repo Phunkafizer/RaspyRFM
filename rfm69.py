@@ -121,10 +121,15 @@ class Rfm69:
         config[RegTestDagc] = 0x30
         config[RegRssiThresh] = 0x90
         config[RegFifoThresh] = 0x8F
+        config[RegBitrateMsb] = 0x1A
+        config[RegBitrateLsb] = 0x0B
         
         for key in config:
             self.__WriteReg(key, config[key])
             
+        self.__WriteReg(RegOpMode, MODE_STDBY << 2)
+        self.__WaitMode()
+
         print("INIT COMPLETE")
     
     def __RfmIrq(self, ch):

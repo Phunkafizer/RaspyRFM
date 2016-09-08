@@ -21,8 +21,8 @@ class rawsensor(object):
                 self.__raw = data
 
         def __str__(self):
-                res = 'raw';
-                for data in self.__raw:
+                res = 'RAW RSSI ' + str(self.__raw[1]) + " dBm: "
+                for data in self.__raw[0]:
                     res = res + ' ' + hex(data)[2:];
                 return res;
 
@@ -44,11 +44,16 @@ class rawsensor(object):
 class lacross(rawsensor):
         def __init__(self, data):
                 rawsensor.__init__(self, data)
-                self._data['ID'] = hex((data[0] << 4 | data[1] >> 4) & 0xFC)[2:]
-                self._data['T'] = (10 * ((data[1] & 0xF) - 4) + (data[2] >> 4) + (data[2] & 0xF) / 10.0, 'C')
-                rh = data[3] & 0x7F
+                id = data[0][0] << 4 | data[0][1] >> 4
+                print "A", hex(data[0][0])[2:], hex(data[0][1])[2:]
+                self._data['ID'] = hex(id & 0xFC)[2:]
+                self._data['init'] = bool(id & 1<<1)
+                self._data['T'] = (10 * ((data[0][1] & 0xF) - 4) + (data[0][2] >> 4) + (data[0][2] & 0xF) / 10.0, 'C')
+                rh = data[0][3] & 0x7F
                 if rh <= 100:
                         self._data['RH'] = (rh, '%')
+                self._data['batlo'] = bool(rh & 1<<7)
+                self._data['RSSI'] = data[1]
 
         def __str__(self):
                 res = 'La crosse ' + str(self._data) # + ' ' + rawsensor.__str__(self);
@@ -56,7 +61,7 @@ class lacross(rawsensor):
 
         @staticmethod
         def Create(data):
-                if len(data) >= 5 and len(data) <= 8 and crc8(data) == 0:
+                if len(data[0]) >= 5 and len(data[0]) <= 8 and crc8(data[0]) == 0:
                         return lacross(data)
 
 class emt7110(rawsensor):
