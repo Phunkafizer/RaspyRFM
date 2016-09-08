@@ -79,10 +79,10 @@ MODE_TX = 3
 MODE_RX = 4
 
 class Rfm69:
-    def __init__(self, spiport = 0, gpio_int = 25):
+    def __init__(self, cs = 0, gpio_int = 25):
         self.__event = threading.Event()
         self.__spi = spidev.SpiDev()
-        self.__spi.open(0, spiport)
+        self.__spi.open(0, cs)
         self.__spi.max_speed_hz=int(5E6)
         self.__gpio_int = gpio_int
         
@@ -105,11 +105,10 @@ class Rfm69:
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(gpio_int, GPIO.IN)
         GPIO.add_event_detect(gpio_int, GPIO.RISING, callback=self.__RfmIrq)
-        
-        
+
         self.__WriteReg(RegOpMode, MODE_STDBY << 2)
         self.__WaitMode()
-        
+       
         config = {}
         config[RegDataModul] = 0 #packet mode, modulation shaping, modulation
         config[RegPayloadLength] = 0
@@ -120,7 +119,7 @@ class Rfm69:
         config[RegPacketConfig2] = 0 #1<<AutoRxRestartOn
         config[RegAfcFei] = 1<<3 | 1<<1 | 0<<2  #AFC auto clear, clear AFC, afcAutoOn
         config[RegTestDagc] = 0x30
-        config[RegRssiThresh] = 0xE0
+        config[RegRssiThresh] = 0x90
         config[RegFifoThresh] = 0x8F
         
         for key in config:
@@ -129,7 +128,6 @@ class Rfm69:
         print("INIT COMPLETE")
     
     def __RfmIrq(self, ch):
-        print("IRQ!")
         self.__event.set();
     
     def __WriteReg(self, reg, val):
@@ -192,9 +190,12 @@ class Rfm69:
                 self.__SetReg(RegDataModul, 0x03, value)
                 
             elif key == "SyncPattern":
-                conf = ((len(value) - 1) & 0x07) << 3
+                conf = 0
                 if (len(value)) > 0:
+                    conf = ((len(value) - 1) & 0x07) << 3
                     conf |= 1<<7
+                else:
+                    conf = 1<<6
                 self.__WriteReg(RegSyncConfig,  conf)
                 for i, d in enumerate(value):
                     self.__WriteReg(RegSyncValue1 + i, d)
@@ -216,6 +217,10 @@ class Rfm69:
                 
             elif key == "LnaGain":
                 self.__SetReg(RegLna, 0x03, value)
+
+            elif key == "RssiThresh":
+                th = -(value * 2)
+                self.__WriteReg(RegRssiThresh, th)
                 
             else:
                 print("Unrecognized option >>" + key + "<<")
@@ -234,10 +239,8 @@ class Rfm69:
             self.ReadReg(RegFifo)
             status = self.ReadReg(RegIrqFlags2)
             
-        self.__WriteReg(RegPayloadLength, 30)
-        self.__SetDioMapping(0, 0) # DIO0 -> PacketSent
-        self.__SetDioMapping(1, 2) # DIO1 -> FifoNotEmpty
-        
+        self.__WriteReg(RegPayloadLength, 0)
+        self.__SetDioMapping(0, 0) # DIO0 -> PacketSent        
         self.__WriteReg(RegOpMode, MODE_TX << 2) #TX Mode
         
         for i, d in enumerate(data):
@@ -248,50 +251,24 @@ class Rfm69:
                 while (status & 0x80) == 0x80:
                     status = self.ReadReg(RegIrqFlags2)    
 
-    
         #wait packet sent
-        status = self.ReadReg(RegIrqFlags2)
-        while (status & 0x08) == 0x00:
-           status = self.ReadReg(RegIrqFlags2)
-            #print ("s ", hex(status))
-
+        self.__event.wait()
+        self.__event.clear()
         self.__WriteReg(RegOpMode, MODE_STDBY << 2)
         self.__WaitMode()
-        return
                 
-        time.sleep(1)
-        
-        self.__WriteReg(RegOpMode, MODE_TX << 2) #TX Mode
-        
-        for d in [1, 2, 3, 4, 5]:
-            status = self.ReadReg(RegIrqFlags2)
-            #print "Status: ", hex(status)
-            #check FifoFull
-            #while (status & 0x80) == 0x80:
-              #  status = self.ReadReg(RegIrqFlags2)
-            #self.__WriteReg(RegFifo, d)
-            
-        #for x in range(16):
-        #   self.__WriteReg(RegFifo, 0x55)
-        
-        #self.__event.wait()
-        #self.__event.clear()
-        #check PacketSent
-        status = self.ReadReg(RegIrqFlags2)
-        while (status & 0x08) == 0x00:
-            #print "Status: ", hex(self.ReadReg(RegIrqFlags2))
-            status = self.ReadReg(RegIrqFlags2)
-        
-        self.__WriteReg(RegOpMode, 0) #idle mode
-        self.__WaitMode()
-        
     def ReceivePacket(self, length):
         self.__WriteReg(RegPayloadLength, length)
         
-        self.__SetDioMapping(0, 1) #DIO0 -> PayloadReady
+        self.__SetDioMapping(0, 2) #DIO0 -> SyncAddress
         self.__SetDioMapping(1, 3)
         self.__SetReg(RegOpMode, 7<<2, 4<<2) #RX mode
-        
+
+        self.__event.wait()
+        self.__event.clear()
+        self.__SetDioMapping(0, 1) #DIO0 -> PayloaReady
+
+        rssi = -self.ReadReg(RegRssiValue) / 2
         self.__event.wait()
         self.__event.clear()
 
@@ -301,4 +278,4 @@ class Rfm69:
         
         self.__WriteReg(RegOpMode, 0) #idle mode
         
-        return result
+        return (result, rssi)
