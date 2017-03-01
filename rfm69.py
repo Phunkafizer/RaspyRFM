@@ -8,21 +8,21 @@ FSTEP = FXOSC / (1<<19)
 
 
 #------ Raspberry RFM Module connection -----
-#
+# Connect RaspyRFM module to pins 17-26 on raspberry pi
 #-------------------------------------------------#
 # Raspi | Raspi | Raspi | RFM69 | RFM12 | PCB con #
 # Name  | GPIO  | Pin   | Name  |  Name |  Pin    #
 #-------------------------------------------------#
-# 3V3   |   -   |  17   |                   1
-#  -    |  24   |  18   | DIO1  | FFIT  |   2
-# MOSI  |  10   |  19   | MOSI  | SDI   |   3
-# GND   |   -   |  20   | GND   | GND   |   4
-# MISO  |   9   |  21   | MISO  | SDO   |   5 
-#  -    |  25   |  22   | DIO0  | nIRQ  |   6
-# SCKL  |  11   |  23   | SCK   | SCK   |   7
-# CE0   |   8   |  24   | NSS   | nSEL  |   8
-# CE1   |   7   |  26   | DIO2  | nFFS  |  10
-#--------------------------------------------
+# 3V3   |   -   |  17   | 3.3V  | VDD   |   1     #
+#  -    |  24   |  18   | DIO1  | FFIT  |   2     # only when PCB jumper closed, DIO0/nIRQ on 2nd modul!
+# MOSI  |  10   |  19   | MOSI  | SDI   |   3     #
+# GND   |   -   |  20   | GND   | GND   |   4     #
+# MISO  |   9   |  21   | MISO  | SDO   |   5     #
+#  -    |  25   |  22   | DIO0  | nIRQ  |   6     #
+# SCKL  |  11   |  23   | SCK   | SCK   |   7     #
+# CE0   |   8   |  24   | NSS   | nSEL  |   8     #
+# CE1   |   7   |  26   | DIO2  | nFFS  |  10     # only when PCB jumper closed, NSS/nFFS on 2nd modul!
+#-------------------------------------------------#
 
 #RFM69 registers
 RegFifo = 0x00
