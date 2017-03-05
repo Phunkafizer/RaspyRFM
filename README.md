@@ -7,6 +7,12 @@ usage example:
 sudo intertechno.py 0000F0000FFF
 ##lacrosse.py
 receiving temperature sensors
+##hamarx.py
+receive hama remote controller for remote control sockets
+##logilighttx.py
+control remote control sockets
+##logilightrx.py
+receive logilight remote control
 #Installation
 *Install GPIO
 (http://sourceforge.net/projects/raspberry-gpio-python/)
