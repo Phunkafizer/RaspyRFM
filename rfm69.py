@@ -226,6 +226,9 @@ class Rfm69:
             elif key == "RssiThresh":
                 th = -(value * 2)
                 self.__WriteReg(RegRssiThresh, th)
+
+            elif key == "Dagc":
+                self.__WriteReg(RegDagc, value)
                 
             else:
                 print("Unrecognized option >>" + key + "<<")
