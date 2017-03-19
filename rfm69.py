@@ -119,7 +119,7 @@ class Rfm69:
         config[RegPacketConfig2] = 0 #1<<AutoRxRestartOn
         config[RegAfcFei] = 1<<3 | 1<<1 | 0<<2  #AFC auto clear, clear AFC, afcAutoOn
         config[RegTestDagc] = 0x30
-        config[RegRssiThresh] = 0x90
+        config[RegRssiThresh] = 180
         config[RegFifoThresh] = 0x8F
         config[RegBitrateMsb] = 0x1A
         config[RegBitrateLsb] = 0x0B
@@ -217,6 +217,17 @@ class Rfm69:
                 self.__SetReg(RegRxBw, 0x1F, m<<3 | e)
                 self.__SetReg(RegAfcBw, 0x1F, m<<3 | e)
                 
+            elif key == "AfcBandwidth":
+                RxBw = FXOSC / value / 1000 / 4
+                e = 0
+                while (RxBw > 32) and (e < 7):
+                    e += 1
+                    RxBw /= 2
+                RxBw = RxBw / 4 - 4
+                RxBw = max(RxBw, 0)
+                m = int(RxBw)
+                self.__SetReg(RegAfcBw, 0x1F, m<<3 | e)
+
             elif key == "Preamble":
                 self.__WriteRegWord(RegPreambleMsb, value)
                 
@@ -230,6 +241,9 @@ class Rfm69:
             elif key == "Dagc":
                 self.__WriteReg(RegDagc, value)
                 
+            elif key == "AfcFei":
+              self.__WriteReg(RegAfcFei, value)
+
             else:
                 print("Unrecognized option >>" + key + "<<")
                 
