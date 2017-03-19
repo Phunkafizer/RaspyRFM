@@ -45,7 +45,6 @@ class lacross(rawsensor):
         def __init__(self, data):
                 rawsensor.__init__(self, data)
                 id = data[0][0] << 4 | data[0][1] >> 4
-                print "A", hex(data[0][0])[2:], hex(data[0][1])[2:]
                 self._data['ID'] = hex(id & 0xFC)[2:]
                 self._data['init'] = bool(id & 1<<1)
                 self._data['T'] = (10 * ((data[0][1] & 0xF) - 4) + (data[0][2] >> 4) + (data[0][2] & 0xF) / 10.0, 'C')
