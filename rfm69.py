@@ -32,13 +32,24 @@ RegBitrateMsb = 0x03
 RegBitrateLsb = 0x04
 RegFdevMsb = 0x05
 RegFdevLsb = 0x06
-RegFrMsb = 0x07
-RegFrMid = 0x08
-RegFrLsb = 0x09
+RegFrfMsb = 0x07
+RegFrfMid = 0x08
+RegFrfLsb = 0x09
+RegOsc1 = 0x0A
+RegAfcCtrl = 0x0B
+RegListen1 = 0x0D
+RegListen2 = 0x0E
+RegListen3 = 0x0F
+RegVersion = 0x10
 RegPaLevel = 0x11
+RegPaRamp = 0x12
+RegOcp = 0x13
 RegLna = 0x18
 RegRxBw = 0x19
 RegAfcBw = 0x1A
+RegOokPeak = 0x1B
+RegOokAvg = 0x1C
+RegOokFix = 0x1D
 RegAfcFei = 0x1E
 RegAfcMsb = 0x1F
 RegAfcLsb = 0x20
@@ -51,15 +62,24 @@ RegDioMapping2 = 0x26
 RegIrqFlags1 = 0x27
 RegIrqFlags2 = 0x28
 RegRssiThresh = 0x29
+RegRxTimeout1 = 0x2A
+RegRxTimeout2 = 0x2B
 RegPreambleMsb = 0x2C
 RegPreambleLsb = 0x2D
 RegSyncConfig = 0x2E
 RegSyncValue1 = 0x2F
 RegPacketConfig1 = 0x37
 RegPayloadLength = 0x38
+RegNodeAdrs = 0x39
+RegBroadcastAdrs = 0x3A
+RegAutoModes = 0x3B
 RegFifoThresh = 0x3C
 RegPacketConfig2 = 0x3D
+RegTemp1 = 0x4E
+RegTemp2 = 0x4F
+RegTestLna = 0x58
 RegTestDagc = 0x6F
+RegTestAfc = 0x71
 
 InterPacketRxDelay = 4 #Bitposition
 RestartRx = 2
@@ -106,29 +126,72 @@ class Rfm69:
         GPIO.setup(gpio_int, GPIO.IN)
         GPIO.add_event_detect(gpio_int, GPIO.RISING, callback=self.__RfmIrq)
 
-        self.__WriteReg(RegOpMode, MODE_STDBY << 2)
-        self.__WaitMode()
-       
+        self.__SetMode(MODE_STDBY)
         config = {}
-        config[RegDataModul] = 0 #packet mode, modulation shaping, modulation
-        config[RegPayloadLength] = 0
-        config[RegPreambleMsb] = 0
-        config[RegPreambleLsb] = 0
-        config[RegSyncConfig] = 0       #sync off
+        
+        #SET DEFAULTS
+        config[RegOpMode] = 0x04
+        config[RegDataModul] = 0x00
+        config[RegBitrateMsb] = 0x1A
+        config[RegBitrateMsb + 1] = 0x0B
+        config[RegFdevMsb] = 0x00
+        config[RegFdevMsb + 1] = 0x52
+        config[RegFrfMsb] = 0xE4
+        config[RegFrfMsb + 1] = 0xC0
+        config[RegFrfMsb + 2] = 0x00
+        config[RegOsc1] = 0x41
+        config[RegAfcCtrl] = 0x00
+        config[0x0C] = 0x02
+        config[RegListen1] = 0x92
+        config[RegListen2] = 0xF5
+        config[RegListen3] = 0x20
+        config[RegVersion] = 0x24
+        config[RegPaLevel] = 0x9F
+        config[RegPaRamp] = 0x09
+        config[RegOcp] = 0x1A
+        config[0x17] = 0x9B
+        config[RegLna] = 0x88
+        config[RegRxBw] = 0x55
+        config[RegAfcBw] = 0x8B
+        config[RegOokPeak] = 0x40  
+        config[RegOokAvg] = 0x80
+        config[RegOokFix] = 0x06
+        config[RegAfcFei] = 0x10
+        config[RegAfcMsb] = 0x00
+        config[RegAfcLsb] = 0x00
+        config[RegFeiMsb] = 0x00
+        config[RegFeiLsb] = 0x00
+        config[RegRssiConfig] = 0x02
+        config[RegDioMapping1] = 0x00
+        config[RegDioMapping2] = 0x05
+        config[RegIrqFlags1] = 0x80
+        config[RegIrqFlags2] = 0x10
+        config[RegRssiThresh] = 0xE4
+        config[RegRxTimeout1] = 0x00
+        config[RegRxTimeout2] = 0x00
+        config[RegPreambleMsb] = 0x00
+        config[RegPreambleLsb] = 0x00
+        config[RegSyncConfig] = 0x98
+        config[RegPacketConfig1] = 0x10
+        config[RegPayloadLength] = 0x40
+        config[RegNodeAdrs] = 0x00
+        config[RegBroadcastAdrs] = 0x00
+        config[RegAutoModes] = 0x00
+        config[RegFifoThresh] = 0x8F
+        config[RegPacketConfig2] = 0x02
+        config[RegTemp1] = 0x01
+        config[RegTemp2] = 0x00
+        config[RegTestLna] = 0x1B
+        config[RegTestDagc] = 0x30
+        config[RegTestAfc] = 0x00
+
         config[RegPacketConfig1] = 0x00 #Fixed length, CRC off, no adr
         config[RegPacketConfig2] = 0 #1<<AutoRxRestartOn
-        config[RegAfcFei] = 1<<3 | 1<<1 | 0<<2  #AFC auto clear, clear AFC, afcAutoOn
-        config[RegTestDagc] = 0x30
-        config[RegRssiThresh] = 180
-        config[RegFifoThresh] = 0x8F
-        config[RegBitrateMsb] = 0x1A
-        config[RegBitrateLsb] = 0x0B
         
         for key in config:
             self.__WriteReg(key, config[key])
-            
-        self.__WriteReg(RegOpMode, MODE_STDBY << 2)
-        self.__WaitMode()
+        
+        self.__SetMode(MODE_STDBY)
 
         print("INIT COMPLETE")
     
@@ -137,7 +200,7 @@ class Rfm69:
     
     def __WriteReg(self, reg, val):
         temp = self.__spi.xfer2([(reg & 0x7F) | 0x80, val & 0xFF])
-        
+
     def __WriteRegWord(self, reg, val):
         self.__WriteReg(reg, (val >> 8) & 0xFF)
         self.__WriteReg(reg + 1, val & 0xFF)
@@ -152,7 +215,12 @@ class Rfm69:
             self.__SetReg(RegDioMapping1, 0xC0 >> (dio * 2), mapping << (6 - dio * 2))
         elif (dio == 5):
             self.__SetReg(RegDioMapping2, 0x03 << 4, mapping << 4)
-    
+
+    def __SetMode(self, mode):
+        self.__WriteReg(RegOpMode, mode << 2)
+        while ((self.ReadReg(RegIrqFlags1) & (1<<7)) == 0):
+            pass
+
     def ReadReg(self, reg):
         temp = self.__spi.xfer2([reg & 0x7F, 0x00])
         return temp[1]
@@ -172,9 +240,9 @@ class Rfm69:
             value = params[key]
             if key == "Freq":
                 fword = int(round(value * 1E6 / FSTEP))
-                self.__WriteReg(RegFrLsb, fword)
-                self.__WriteReg(RegFrMid, fword >> 8)
-                self.__WriteReg(RegFrMsb, fword >> 16)
+                self.__WriteReg(RegFrfMsb, fword >> 16)
+                self.__WriteReg(RegFrfMid, fword >> 8)
+                self.__WriteReg(RegFrfLsb, fword)
             
             elif key == "TXPower":
                 pwr = int(value + 18)
@@ -215,7 +283,6 @@ class Rfm69:
                 RxBw = max(RxBw, 0)
                 m = int(RxBw)
                 self.__SetReg(RegRxBw, 0x1F, m<<3 | e)
-                self.__SetReg(RegAfcBw, 0x1F, m<<3 | e)
                 
             elif key == "AfcBandwidth":
                 RxBw = FXOSC / value / 1000 / 4
@@ -247,10 +314,6 @@ class Rfm69:
             else:
                 print("Unrecognized option >>" + key + "<<")
                 
-    def __WaitMode(self):
-        while ((self.ReadReg(RegIrqFlags1) & (1<<7)) == 0):
-            pass
-                
     def SendPacket(self, data):
         self.__WriteReg(RegOpMode, MODE_STDBY << 2)
         self.__WaitMode()
@@ -276,15 +339,14 @@ class Rfm69:
         #wait packet sent
         self.__event.wait()
         self.__event.clear()
-        self.__WriteReg(RegOpMode, MODE_STDBY << 2)
-        self.__WaitMode()
+        self.__SetMode(MODE_STDBY)
                 
     def ReceivePacket(self, length):
         self.__WriteReg(RegPayloadLength, length)
         
         self.__SetDioMapping(0, 2) #DIO0 -> SyncAddress
         self.__SetDioMapping(1, 3)
-        self.__SetReg(RegOpMode, 7<<2, 4<<2) #RX mode
+        self.__SetMode(MODE_RX)
 
         self.__event.wait()
         self.__event.clear()
@@ -298,6 +360,6 @@ class Rfm69:
         for x in range(length):
             result.append(self.ReadReg(RegFifo))
         
-        self.__WriteReg(RegOpMode, 0) #idle mode
+        self.__SetMode(MODE_STDBY)
         
         return (result, rssi)

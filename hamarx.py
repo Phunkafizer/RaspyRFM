@@ -44,7 +44,7 @@ while True:
   bindata = []
   binval = 0
   binmask = 0x80
-  for d in data:
+  for d in data[0]:
     rawmask = 0x80
     while (rawmask > 0) and (len(bindata) < 8):
       if (d & rawmask) > 0:
