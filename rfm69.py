@@ -315,8 +315,7 @@ class Rfm69:
                 print("Unrecognized option >>" + key + "<<")
                 
     def SendPacket(self, data):
-        self.__WriteReg(RegOpMode, MODE_STDBY << 2)
-        self.__WaitMode()
+        self.__SetMode(MODE_STDBY)
         
         #flush FIFO
         status = self.ReadReg(RegIrqFlags2)
