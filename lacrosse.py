@@ -21,6 +21,7 @@ rfm.SetParams(
 
 data = []
 
+print "Waiting for sensors..."
 while 1:
     data = rfm.ReceivePacket(7)
     obj = rawsensor.CreateSensor(data)

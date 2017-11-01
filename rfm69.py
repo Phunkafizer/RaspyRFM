@@ -313,6 +313,13 @@ class Rfm69:
 
             else:
                 print("Unrecognized option >>" + key + "<<")
+
+    def __WaitInt(self):
+        self.__event.clear()
+        if not GPIO.input(self.__gpio_int):
+            while not self.__event.wait(0.2):
+                pass
+
                 
     def SendPacket(self, data):
         self.__SetMode(MODE_STDBY)
@@ -336,8 +343,7 @@ class Rfm69:
                     status = self.ReadReg(RegIrqFlags2)    
 
         #wait packet sent
-        self.__event.wait()
-        self.__event.clear()
+        self.__WaitInt()
         self.__SetMode(MODE_STDBY)
                 
     def ReceivePacket(self, length):
@@ -347,13 +353,11 @@ class Rfm69:
         self.__SetDioMapping(1, 3)
         self.__SetMode(MODE_RX)
 
-        self.__event.wait()
-        self.__event.clear()
+        self.__WaitInt()
         self.__SetDioMapping(0, 1) #DIO0 -> PayloaReady
 
         rssi = -self.ReadReg(RegRssiValue) / 2
-        self.__event.wait()
-        self.__event.clear()
+        self.__WaitInt()
 
         result = []
         for x in range(length):
