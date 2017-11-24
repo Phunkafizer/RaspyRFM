@@ -35,7 +35,7 @@ for i in range(4):
     else:
         str += 'F'
 
-str += 'FFF'
+str += 'FF'
 
 if sys.argv[3] == 'on':
   str += 'F'
