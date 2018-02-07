@@ -4,15 +4,6 @@ from rfm69 import Rfm69
 import rfm69
 import re
 
-rfm = Rfm69()
-rfm.SetParams(
-    Freq = 433.92,
-    Datarate = 2.666666,
-    TXPower = 13,
-    ModulationType = rfm69.OOK,
-    SyncPattern = []
-    )
-
 #Frame generation
 def MakeFrame(code, rep):
     data = [0x80, 0x00, 0x00, 0x00] #sync
@@ -44,4 +35,14 @@ if __name__ == "__main__":
         usage()
 
     data = MakeFrame(sys.argv[1], 5)
+
+    rfm = Rfm69()
+    rfm.SetParams(
+        Freq = 433.92,
+        Datarate = 2.666666,
+        TXPower = 13,
+        ModulationType = rfm69.OOK,
+        SyncPattern = []
+    )
+
     rfm.SendPacket(data)

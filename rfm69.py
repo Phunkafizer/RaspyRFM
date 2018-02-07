@@ -156,7 +156,7 @@ class Rfm69:
         config[RegOokPeak] = 0x40  
         config[RegOokAvg] = 0x80
         config[RegOokFix] = 0x06
-        config[RegAfcFei] = 0x10
+        config[RegAfcFei] = 1<<3 | 1<<2
         config[RegAfcMsb] = 0x00
         config[RegAfcLsb] = 0x00
         config[RegFeiMsb] = 0x00
@@ -362,7 +362,13 @@ class Rfm69:
         result = []
         for x in range(length):
             result.append(self.ReadReg(RegFifo))
+
+        afc = self.ReadReg(RegAfcMsb) << 8
+        afc = afc | self.ReadReg(RegAfcLsb)
+        if afc >= 0x8000:
+            afc = afc - 0x10000
+
         
         self.__SetMode(MODE_STDBY)
         
-        return (result, rssi)
+        return (result, rssi, afc)
