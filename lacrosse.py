@@ -10,7 +10,7 @@ import time
 rfm = Rfm69()
 
 rfm.SetParams(
-    Freq = 868.310, #MHz center frequency
+    Freq = 868.312, #MHz center frequency
     Datarate = 9.579, #17.241, #kbit/s baudrate
     ModulationType = rfm69.FSK, #modulation
     Deviation = 90, #90 kHz frequency deviation
