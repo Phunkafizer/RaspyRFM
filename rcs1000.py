@@ -3,6 +3,8 @@
 import xx2262
 import sys
 import re
+import rfm69
+from rfm69 import Rfm69
 
 def usage():
     print "usage:", sys.argv[0], "<5xDIPSWITCH> <CHANNEL 1-4> on|off"
@@ -45,4 +47,13 @@ else:
 print "Sending", str
 
 data = xx2262.MakeFrame(str, 8)
-xx2262.rfm.SendPacket(data)
+
+rfm = Rfm69()
+rfm.SetParams(
+	Freq = 433.92,
+        Datarate = 2.666666,
+        TXPower = 13,
+        ModulationType = rfm69.OOK,
+        SyncPattern = []
+)
+rfm.SendPacket(data)
