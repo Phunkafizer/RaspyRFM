@@ -20,11 +20,14 @@ def encodeBits(val, num, pol, inv):
 def usage():
     print "usage:"
     print "intertechno <HOUSECODE A-P> <GROUP 1-4> <CHANNEL 1-4> on|off" #12-digit code 12 * ['0' | '1' | 'f']
-    print "OR"
+    print "intertechno <12 symbols tristate code>"
     print "intertechno <26 bit address> <1 goup bit> <4 bit unit> on|off"
+    print "intertechno <32 bit code>"
     print "Examples:"
     print "intertechno A 1 1 on"
+    print "intertechno 0000FFFF0FFF"
     print "interttechno 11110000111100001111000010 0 1110 on"
+    print "interttechno 11110000111100001111000010010000"
     sys.exit(1)
 
 if __name__ == "__main__":
@@ -55,10 +58,10 @@ if __name__ == "__main__":
 		itstr = ''
 		itstr += encodeBits(housecode, 4, '0', False)
 
-		ch = ord(cmd[2]) - ord('1')
+		ch = ord(cmd[4]) - 1
 		itstr += encodeBits(ch, 2, '0', False)
 
-		group = ord(cmd[4]) - ord('1')
+		group = ord(cmd[2]) - 1
 		itstr += encodeBits(group, 2, '0', False)
 
 		itstr += '0F'
@@ -67,7 +70,7 @@ if __name__ == "__main__":
 			itstr += 'FF'
 		else:
 			itstr += 'F0'
-  
+
 		data = xx2262.MakeFrame(itstr, 5)
 		datarate = 2.66666666
 
