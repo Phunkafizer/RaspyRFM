@@ -1,6 +1,7 @@
 #!/usr/bin/env python2.7
 
 import rfm69
+from rfm69 import Rfm69
 import sensors
 from sensors import rawsensor
 import time
@@ -66,7 +67,14 @@ def LogSensor(data):
             return
     print "No match for ID"
 
-rfm = rfm69.Rfm69()
+
+if Rfm69.Test(1):
+    rfm = Rfm69(1, 24) #when using the RaspyRFM twin
+elif Rfm69.Test(0):
+    rfm = Rfm69() #when using a single single 868 MHz RaspyRFM
+else:
+    print "No RFM69 module found!"
+    exit()
 
 rfm.SetParams(
     Freq = 868.300, #MHz center frequency

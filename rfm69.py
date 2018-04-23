@@ -99,29 +99,39 @@ MODE_TX = 3
 MODE_RX = 4
 
 class Rfm69:
+    @staticmethod
+    def Test(cs):
+        spi = spidev.SpiDev()
+        spi.open(0, cs)
+        #Testing presence of module
+        err = False
+        for i in range(0, 8):
+            spi.xfer2([(RegSyncValue1 + i) | 0x80, 0x55])
+            test = spi.xfer2([(RegSyncValue1 + i), 0x00])[1]
+            if test != 0x55:
+                err = True
+                break
+            temp = spi.xfer2([(RegSyncValue1 + i) | 0x80, 0xAA])
+            test = spi.xfer2([(RegSyncValue1 + i), 0x00])[1]
+            if test != 0xAA:
+                err = True
+                break
+        spi.close()
+        return not err
+
+
     def __init__(self, cs = 0, gpio_int = 25):
+        if not Rfm69.Test(cs):
+            print "ERROR! RFM69 not found"
+            return
+
         self.__event = threading.Event()
         self.__spi = spidev.SpiDev()
         self.__spi.open(0, cs)
         self.__spi.max_speed_hz=int(5E6)
         self.__gpio_int = gpio_int
         
-        #Testing presence of module
-        err = False
-        for i in range(0, 8):
-            self.__WriteReg(RegSyncValue1 + i, 0x55)
-            if self.ReadReg(RegSyncValue1 + i) != 0x55:
-                err = True
-                break
-            self.__WriteReg(RegSyncValue1 + i, 0xAA)
-            if self.ReadReg(RegSyncValue1 + i) != 0xAA:
-                err = True
-                break
-        if err == True:
-            print "ERROR! RFM69 not found!"
-            return
-
-        print "RFM69 found!"
+        print "RFM69 found on CS", cs
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(gpio_int, GPIO.IN)
         GPIO.add_event_detect(gpio_int, GPIO.RISING, callback=self.__RfmIrq)
@@ -196,7 +206,7 @@ class Rfm69:
         print("INIT COMPLETE")
     
     def __RfmIrq(self, ch):
-        self.__event.set();
+        self.__event.set()
     
     def __WriteReg(self, reg, val):
         temp = self.__spi.xfer2([(reg & 0x7F) | 0x80, val & 0xFF])

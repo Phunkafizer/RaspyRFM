@@ -6,8 +6,14 @@ import sensors
 import sys
 import time
 
-rfm = Rfm69() #when using a single single 868 MHz RaspyRFM 
-#rfm = Rfm69(1, 24) #when using the RaspyRFM twin
+if Rfm69.Test(1):
+    rfm = Rfm69(1, 24) #when using the RaspyRFM twin
+elif Rfm69.Test(0):
+    rfm = Rfm69() #when using a single single 868 MHz RaspyRFM
+else:
+    print "No RFM69 module found!"
+    exit()
+
 rfm.SetParams(
     Freq = 868.350,
     Datarate = 5.0,
