@@ -48,6 +48,10 @@ print "Sending", str
 
 data = xx2262.MakeFrame(str, 8)
 
+if not Rfm69.Test(0):
+	print "RFM69 not found!"
+	exit()
+
 rfm = Rfm69()
 rfm.SetParams(
 	Freq = 433.92,
