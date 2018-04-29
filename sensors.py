@@ -1,3 +1,5 @@
+import datetime
+
 def crc8(buf):
         crc = 0
         for j in range(5):
@@ -18,6 +20,7 @@ def csum(data):
 class rawsensor(object):
         def __init__(self, data):
                 self._data = {}
+                self._data['timestamp'] = datetime.datetime.now().replace(microsecond=0).isoformat()
                 self.__raw = data
 
         def __str__(self):
