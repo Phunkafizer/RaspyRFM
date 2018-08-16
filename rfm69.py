@@ -103,6 +103,7 @@ class Rfm69:
     def Test(cs):
         spi = spidev.SpiDev()
         spi.open(0, cs)
+        spi.max_speed_hz = 5000
         #Testing presence of module
         err = False
         for i in range(0, 8):
