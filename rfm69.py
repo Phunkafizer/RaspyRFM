@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import RPi.GPIO as GPIO
 import spidev
 import threading
@@ -123,7 +125,7 @@ class Rfm69:
 
     def __init__(self, cs = 0, gpio_int = 25):
         if not Rfm69.Test(cs):
-            print "ERROR! RFM69 not found"
+            print("ERROR! RFM69 not found")
             return
 
         self.__event = threading.Event()
@@ -132,7 +134,7 @@ class Rfm69:
         self.__spi.max_speed_hz=int(5E6)
         self.__gpio_int = gpio_int
         
-        print "RFM69 found on CS", cs
+        print("RFM69 found on CS", cs)
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(gpio_int, GPIO.IN)
         GPIO.add_event_detect(gpio_int, GPIO.RISING, callback=self.__RfmIrq)

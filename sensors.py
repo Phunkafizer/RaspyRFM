@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import datetime
 
 def crc8(buf):
