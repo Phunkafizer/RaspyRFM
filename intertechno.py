@@ -26,8 +26,8 @@ def usage():
     print "Examples:"
     print "intertechno A 1 1 on"
     print "intertechno 0000FFFF0FFF"
-    print "interttechno 11110000111100001111000010 0 1110 on"
-    print "interttechno 11110000111100001111000010010000"
+    print "intertechno 11110000111100001111000010 0 1110 on"
+    print "intertechno 11110000111100001111000010010000"
     sys.exit(1)
 
 if __name__ == "__main__":
@@ -37,7 +37,6 @@ if __name__ == "__main__":
 	for i in range(1, len(sys.argv)):
 		cmd += " " + sys.argv[i]
 	cmd = cmd.strip()
-	daatarate = None
 
 	if re.match('^[01]{32}$', cmd) is not None:
 		data = it32.MakeFrame(cmd, 5)
