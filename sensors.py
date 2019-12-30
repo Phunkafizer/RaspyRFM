@@ -56,7 +56,7 @@ class lacross(rawsensor):
                 rh = data[0][3] & 0x7F
                 if rh <= 100:
                         self._data['RH'] = (rh, '%')
-                self._data['batlo'] = bool(rh & 1<<7)
+                self._data['batlo'] = bool(data[0][3] & 1<<7)
                 self._data['RSSI'] = data[1]
                 self._data['AFC'] = data[2]
 
