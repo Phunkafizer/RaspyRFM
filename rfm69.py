@@ -374,7 +374,9 @@ class Rfm69(threading.Thread):
 
 	def __WaitInt(self):
 		self.__event.clear()
-		while not self.__event.wait(0.3):
+		if GPIO.input(self.__gpio_int):
+			return
+		while not self.__event.wait(0.1):
 			if GPIO.input(self.__gpio_int):
 				print("GPIO high!")
 				break
@@ -428,11 +430,14 @@ class Rfm69(threading.Thread):
 		self.__rxmode = False
 		self.__mutex.release()
 
-	def ReadFifoWait(self):
-		while True:
+	def ReadFifoWait(self, length):
+		ret = []
+		while length > 0:
 			flags = self.ReadReg(RegIrqFlags2)
 			if (flags & (1<<6)) != 0: #FIFO not empty?
-				return self.ReadReg(RegFifo)
+				ret.append(self.ReadReg(RegFifo))
+				length -= 1
+		return ret
 				
 	def GetNoiseFloor(self):
 		self.__mutex.acquire()
@@ -472,7 +477,7 @@ class Rfm69(threading.Thread):
 				self.__SetDioMapping(0, 2) #DIO0 -> SyncAddress
 			else:
 				self.__SetDioMapping(0, 3) #DIO0 -> RSSI
-			
+			print("goto rx")
 			self.__SetMode(MODE_RX)
 			self.__rxmode = True
 			self.__mutex.release()
@@ -481,7 +486,6 @@ class Rfm69(threading.Thread):
 			if self.__rxmode == True:
 				break;
 
-		result = []
 		rssi = -self.ReadReg(RegRssiValue) / 2
 		afc = self.ReadReg(RegAfcMsb) << 8
 		afc = afc | self.ReadReg(RegAfcLsb)
@@ -494,11 +498,7 @@ class Rfm69(threading.Thread):
 			self.__mutex.release()
 			return
 
-		while True:
-			result.append(self.ReadFifoWait())
-			length -= 1
-			if length == 0:
-				break;
+		result = self.ReadFifoWait(length)
 
 		self.ModeStandBy()
 		self.__mutex.release()
