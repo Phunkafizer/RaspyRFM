@@ -6,22 +6,58 @@ import time
 FXOSC = 32E6
 FSTEP = FXOSC / (1<<19)
 
-
 #------ Raspberry RFM Module connection -----
-# Connect RaspyRFM module to pins 17-26 on raspberry pi
+# RaspyRFM single module
+# Connect to pins 17-26 on raspberry pi
 #-------------------------------------------------#
 # Raspi | Raspi | Raspi | RFM69 | RFM12 | PCB con #
 # Name  | GPIO  | Pin   | Name  |  Name |  Pin    #
 #-------------------------------------------------#
 # 3V3   |   -   |  17   | 3.3V  | VDD   |   1     #
-#  -    |  24   |  18   | DIO1  | FFIT  |   2     # only when PCB jumper closed, DIO0/nIRQ on 2nd modul!
+#  -    |  24   |  18   | DIO1  | FFIT  |   2     # only when PCB jumper closed
 # MOSI  |  10   |  19   | MOSI  | SDI   |   3     #
 # GND   |   -   |  20   | GND   | GND   |   4     #
 # MISO  |   9   |  21   | MISO  | SDO   |   5     #
 #  -    |  25   |  22   | DIO0  | nIRQ  |   6     #
 # SCKL  |  11   |  23   | SCK   | SCK   |   7     #
 # CE0   |   8   |  24   | NSS   | nSEL  |   8     #
-# CE1   |   7   |  26   | DIO2  | nFFS  |  10     # only when PCB jumper closed, NSS/nFFS on 2nd modul!
+# CE1   |   7   |  26   | DIO2  | nFFS  |  10     # only when PCB jumper closed
+#-------------------------------------------------#
+
+# RaspyRFM twin module with 10-pin connector
+# Connect to pins 17-26 on raspberry pi
+#-------------------------------------------------#
+# Raspi | Raspi | Raspi | RFM69 | RFM12 | PCB con #
+# Name  | GPIO  | Pin   | Name  |  Name |  Pin    #
+#-------------------------------------------------#
+# 3V3   |   -   |  17   | 3.3V  | VDD   |   1     #
+#  -    |  24   |  18   | DIO0_2| FFIT  |   2     #
+# MOSI  |  10   |  19   | MOSI  | SDI   |   3     #
+# GND   |   -   |  20   | GND   | GND   |   4     #
+# MISO  |   9   |  21   | MISO  | SDO   |   5     #
+#  -    |  25   |  22   | DIO0_1| nIRQ  |   6     #
+# SCKL  |  11   |  23   | SCK   | SCK   |   7     #
+# CE0   |   8   |  24   | NSS1  | nSEL  |   8     #
+# CE1   |   7   |  26   | NSS2  | nFFS  |  10     #
+#-------------------------------------------------#
+
+# RaspyRFM twin module with 12-pin connector
+# Connect to pins 15-26 on raspberry pi
+#-------------------------------------------------#
+# Raspi | Raspi | Raspi | RFM69 | RFM12 | PCB con #
+# Name  | GPIO  | Pin   | Name  |  Name |  Pin    #
+#-------------------------------------------------#
+#  -    |  22   |  15   | DIO2_2|       |   1     #
+#  -    |  23   |  16   | DIO2_1|       |   2     #
+# 3V3   |   -   |  17   | 3.3V  | VDD   |   3     #
+#  -    |  24   |  18   | DIO0_2| FFIT  |   4     #
+# MOSI  |  10   |  19   | MOSI  | SDI   |   5     #
+# GND   |   -   |  20   | GND   | GND   |   6     #
+# MISO  |   9   |  21   | MISO  | SDO   |   7     #
+#  -    |  25   |  22   | DIO0_1| nIRQ  |   8     #
+# SCKL  |  11   |  23   | SCK   | SCK   |   9     #
+# CE0   |   8   |  24   | NSS1  | nSEL  |   10    #
+# CE1   |   7   |  26   | NSS2  | nFFS  |   12    #
 #-------------------------------------------------#
 
 #RFM69 registers
@@ -107,6 +143,16 @@ MODE_FS = 2
 MODE_TX = 3
 MODE_RX = 4
 
+#DIO packet mode
+DIO0_PM_CRC = 0
+DIO0_PM_PAYLOAD = 1
+DIO0_PM_SYNC = 2
+DIO0_PM_RSSI = 3
+DIO0_PM_SENT = 0
+DIO0_PM_TXDONE = 1
+DIO0_PM_PLLLOCK = 3
+
+
 class Rfm69(threading.Thread):
 	@staticmethod
 	def Test(cs):
@@ -141,10 +187,10 @@ class Rfm69(threading.Thread):
 		self.__spi.max_speed_hz=int(5E6)
 		self.__gpio_int = gpio_int
 		self.__mutex = threading.Lock()
-		self.__rxmode = False
 		self.__syncsize = 4
+		self.__fifothresh = 32
 
-		print "RFM69 found on CS", cs
+		print("RFM69 found on CS " + str(cs))
 		GPIO.setmode(GPIO.BCM)
 		GPIO.setup(gpio_int, GPIO.IN)
 		GPIO.add_event_detect(gpio_int, GPIO.RISING, callback=self.__RfmIrq)
@@ -176,7 +222,7 @@ class Rfm69(threading.Thread):
 		config[RegLna] = 0x88
 		config[RegRxBw] = 0x55
 		config[RegAfcBw] = 0x8B
-		config[RegOokPeak] = 0x40  
+		config[RegOokPeak] = 0x40
 		config[RegOokAvg] = 0x80
 		config[RegOokFix] = 0x06
 		config[RegAfcFei] = 0x00
@@ -212,7 +258,6 @@ class Rfm69(threading.Thread):
 		config[RegPacketConfig2] = 0 #1<<AutoRxRestartOn
 
 		for key in config:
-			v = self.ReadReg(key)
 			self.__WriteReg(key, config[key])
 
 		self.ModeStandBy()
@@ -246,12 +291,20 @@ class Rfm69(threading.Thread):
 
 	def __SetMode(self, mode):
 		self.__WriteReg(RegOpMode, mode << 2)
+		self.__mode = mode
 		while ((self.ReadReg(RegIrqFlags1) & (1<<7)) == 0):
 			pass
 
 	def ReadReg(self, reg):
 		temp = self.__spi.xfer2([reg & 0x7F, 0x00])
 		return temp[1]
+
+	def ReadFifoBurst(self, len):
+		temp = self.__spi.xfer2([0x00] + [0x00] * len)
+		return temp[1:]
+
+	def WriteFifoBurst(self, data):
+		self.__spi.xfer2([0x80] + data)
 
 	def ReadRegWord(self, reg):
 		temp = self.__spi.xfer2([reg & 0x7F, 0x00, 0x00])
@@ -260,12 +313,8 @@ class Rfm69(threading.Thread):
 	def ReadRssiValue(self):
 		self.__WriteReg(RegRssiConfig, 1<<0)
 		r = self.ReadReg(RegRssiConfig)
-		#print(hex(r))
 		while ((r & (1<<1)) == 0):
-		#	print(hex(r))
 			r = self.ReadReg(RegRssiConfig)
-		#	time.sleep(0.05)
-			pass
 		return self.ReadReg(RegRssiValue)
 
 	def ModeStandBy(self):
@@ -353,15 +402,12 @@ class Rfm69(threading.Thread):
 			elif key == "Callback":
 				self.__Callback = value
 
-			elif key == "CallbackSync":
-				self.__CallbackSync = value
-	
 			elif key == "DcFree":
 				self.__SetReg(RegPacketConfig1, 3<<5, value<<5)
 
 			elif key == "OokThreshType":
 				self.__SetReg(RegOokPeak, 3<<6, value<<6)
-				
+
 			elif key == "OokFixedThresh":
 				self.__WriteReg(RegOokFix, value)
 
@@ -369,18 +415,16 @@ class Rfm69(threading.Thread):
 				print("Unrecognized option >>" + key + "<<")
 
 		self.ModeStandBy();
-		self.__rxmode = False
 		self.__mutex.release()
 
 	def __WaitInt(self):
 		self.__event.clear()
 		if GPIO.input(self.__gpio_int):
 			return
-		while not self.__event.wait(0.1):
+		while not self.__event.wait(0.5):
 			if GPIO.input(self.__gpio_int):
-				print("GPIO high!")
 				break
-				
+
 	def WhitenHope(self, data):
 		lfsr = 0x3fe
 		for i, d in enumerate(data):
@@ -391,7 +435,7 @@ class Rfm69(threading.Thread):
 					lfsr |= 1<<0
 				lfsr <<= 1
 			lfsr &= 0x3ff
-			
+
 	def WhitenTI(self, data):
 		lfsr = 0x1ff
 		for i, d in enumerate(data):
@@ -412,40 +456,49 @@ class Rfm69(threading.Thread):
 			self.ReadReg(RegFifo)
 			status = self.ReadReg(RegIrqFlags2)
 
-		self.__WriteReg(RegPayloadLength, 0)
-		self.__SetDioMapping(0, 0) #DIO0 -> PacketSent
-		self.__WriteReg(RegOpMode, MODE_TX << 2) #TX Mode
+		self.__WriteReg(RegPayloadLength, 0) #unlimited length
+		self.__WriteReg(RegFifoThresh, 0x80 | self.__fifothresh) #start TX with 1st byte in FIFO
+		self.__SetDioMapping(0, DIO0_PM_SENT) #DIO0 -> PacketSent
+		self.__SetMode(MODE_TX)
 
-		for i, d in enumerate(data):
-			self.__WriteReg(RegFifo, d)
-			if i>60:
+		l = min(len(data), 64)
+		while True:
+			self.WriteFifoBurst(data[:l])
+			data = data[l:]
+			if len(data) == 0:
+				break
+			while True:
 				status = self.ReadReg(RegIrqFlags2)
-				#check FifoFull
-				while (status & 0x80) == 0x80:
-					status = self.ReadReg(RegIrqFlags2)
+				if (status & (1<<5)) == 0: #below fifothresh
+					l = min(len(data), self.__fifothresh)
+					break
+				if (status & (1<<7)) == 0: #space for at least 1 bytearray
+					l = 1
+					break
 
-		#wait packet sent
 		self.__WaitInt()
 		self.ModeStandBy()
-		self.__rxmode = False
 		self.__mutex.release()
 
 	def ReadFifoWait(self, length):
 		ret = []
 		while length > 0:
 			flags = self.ReadReg(RegIrqFlags2)
+			if ((flags & (1<<5)) != 0) and (length >= 32): #FIFO level?
+				ret += self.ReadFifoBurst(self.__fifothresh)
+				length -= self.__fifothresh
 			if (flags & (1<<6)) != 0: #FIFO not empty?
 				ret.append(self.ReadReg(RegFifo))
 				length -= 1
 		return ret
-				
+
 	def GetNoiseFloor(self):
 		self.__mutex.acquire()
 		#save values
 		rssithresh = self.ReadReg(RegRssiThresh)
 		ookthresh = self.ReadReg(RegOokFix)
 		sync = self.ReadReg(RegSyncConfig)
-		
+
 		self.__WriteReg(RegRssiThresh, 240)
 		self.__WriteReg(RegSyncConfig, 1<<6) #no sync, always fill FIFO
 		self.__WriteReg(RegPayloadLength, 0) #unlimited length
@@ -460,7 +513,7 @@ class Rfm69(threading.Thread):
 					break;
 			if i == 149:
 				break;
-				
+
 		#restore registers
 		self.__WriteReg(RegRssiThresh, rssithresh)
 		self.__WriteReg(RegOokFix, ookthresh)
@@ -469,36 +522,39 @@ class Rfm69(threading.Thread):
 		self.__mutex.release()
 		return thresh
 
-	def ReceivePacket(self, length):
+	def __StartRx(self):
+		self.__SetDioMapping(2, 1) #DIO2 -> DATA
 		self.__mutex.acquire()
 		while True:
-			self.__WriteReg(RegPayloadLength, length)
+			self.__WriteReg(RegPayloadLength, 0) #unlimited lendth
+			self.__WriteReg(RegFifoThresh, self.__fifothresh)
 			if self.__syncsize > 0:
-				self.__SetDioMapping(0, 2) #DIO0 -> SyncAddress
+				self.__SetDioMapping(0, DIO0_PM_SYNC) #DIO0 -> SyncAddress
 			else:
-				self.__SetDioMapping(0, 3) #DIO0 -> RSSI
-			print("goto rx")
+				self.__SetDioMapping(0, DIO0_PM_RSSI) #DIO0 -> RSSI
 			self.__SetMode(MODE_RX)
-			self.__rxmode = True
 			self.__mutex.release()
 			self.__WaitInt()
 			self.__mutex.acquire()
-			if self.__rxmode == True:
+			if self.__mode == MODE_RX:
 				break;
 
-		rssi = -self.ReadReg(RegRssiValue) / 2
+	def StartRx(self, cb):
+		self.__StartRx()
+		cb()
+		self.ModeStandBy()
+		self.__mutex.release()
+
+	def ReceivePacket(self, length):
+		self.__StartRx()
 		afc = self.ReadReg(RegAfcMsb) << 8
 		afc = afc | self.ReadReg(RegAfcLsb)
-		if afc >= 0x8000:
-			afc = afc - 0x10000
-
-		if hasattr(self, "_Rfm69__CallbackSync"):
-			self.__CallbackSync()
-			self.ModeStandBy()
-			self.__mutex.release()
-			return
 
 		result = self.ReadFifoWait(length)
+
+		rssi = -self.ReadReg(RegRssiValue) / 2
+		if afc >= 0x8000:
+			afc = afc - 0x10000
 
 		self.ModeStandBy()
 		self.__mutex.release()
