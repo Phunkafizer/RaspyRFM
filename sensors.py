@@ -66,8 +66,11 @@ class lacross(rawsensor):
 
         @staticmethod
         def Create(data):
-                if len(data[0]) >= 5 and len(data[0]) <= 8 and crc8(data[0]) == 0:
-                        return lacross(data)
+                if (len(data[0]) < 5) or (crc8(data[0]) <> 0):
+                    return
+                if (data[0][1] & 0x0F > 9) or (data[0][2] >> 4 > 9) or (data[0][2] & 0x0F > 9):
+                    return
+                return lacross(data)
 
 class emt7110(rawsensor):
         def __init__(self, data):
