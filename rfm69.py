@@ -251,11 +251,10 @@ class Rfm69(threading.Thread):
 		config[RegTemp1] = 0x01
 		config[RegTemp2] = 0x00
 		config[RegTestLna] = 0x1B
-		config[RegTestDagc] = 0x30
+		config[RegTestDagc] = 0x30 #low beta 0
 		config[RegTestAfc] = 0x00
 
 		config[RegPacketConfig1] = 0x00 #Fixed length, CRC off, no adr
-		config[RegPacketConfig2] = 0 #1<<AutoRxRestartOn
 
 		for key in config:
 			self.__WriteReg(key, config[key])
@@ -304,17 +303,13 @@ class Rfm69(threading.Thread):
 		return temp[1:]
 
 	def WriteFifoBurst(self, data):
-		self.__spi.xfer2([0x80] + data)
+		self.__spi.xfer2([0x80] + list(data))
 
 	def ReadRegWord(self, reg):
 		temp = self.__spi.xfer2([reg & 0x7F, 0x00, 0x00])
 		return (temp[1] << 8) | (temp[2])
 
 	def ReadRssiValue(self):
-		self.__WriteReg(RegRssiConfig, 1<<0)
-		r = self.ReadReg(RegRssiConfig)
-		while ((r & (1<<1)) == 0):
-			r = self.ReadReg(RegRssiConfig)
 		return self.ReadReg(RegRssiValue)
 
 	def ModeStandBy(self):
@@ -387,7 +382,7 @@ class Rfm69(threading.Thread):
 				self.__WriteRegWord(RegPreambleMsb, value)
 
 			elif key == "LnaGain":
-				self.__SetReg(RegLna, 0x03, value)
+				self.__SetReg(RegLna, 0x07, value)
 
 			elif key == "RssiThresh":
 				th = -(value * 2)
@@ -410,6 +405,9 @@ class Rfm69(threading.Thread):
 
 			elif key == "OokFixedThresh":
 				self.__WriteReg(RegOokFix, value)
+
+			elif key == "OokPeakThreshDec":
+				self.__SetReg(RegOokPeak, 7<<0, value)
 
 			else:
 				print("Unrecognized option >>" + key + "<<")
@@ -526,7 +524,7 @@ class Rfm69(threading.Thread):
 		self.__SetDioMapping(2, 1) #DIO2 -> DATA
 		self.__mutex.acquire()
 		while True:
-			self.__WriteReg(RegPayloadLength, 0) #unlimited lendth
+			self.__WriteReg(RegPayloadLength, 0) #unlimited length
 			self.__WriteReg(RegFifoThresh, self.__fifothresh)
 			if self.__syncsize > 0:
 				self.__SetDioMapping(0, DIO0_PM_SYNC) #DIO0 -> SyncAddress
@@ -547,12 +545,12 @@ class Rfm69(threading.Thread):
 
 	def ReceivePacket(self, length):
 		self.__StartRx()
-		afc = self.ReadReg(RegAfcMsb) << 8
-		afc = afc | self.ReadReg(RegAfcLsb)
-
 		result = self.ReadFifoWait(length)
 
 		rssi = -self.ReadReg(RegRssiValue) / 2
+		afc = self.ReadReg(RegAfcMsb) << 8
+		afc = afc | self.ReadReg(RegAfcLsb)
+
 		if afc >= 0x8000:
 			afc = afc - 0x10000
 
