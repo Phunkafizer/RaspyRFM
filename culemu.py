@@ -67,7 +67,7 @@ class Connection(threading.Thread):
 			lines = str.splitlines(data)
 
 			for line in lines:
-				#print("FROM FHEM: " + line)
+				print("FROM FHEM: " + line)
 
 				if line == 'V':
 					self.sendHost("V 1.0 CULEMU")
@@ -146,12 +146,9 @@ cul.start()
 class RxThread(threading.Thread):
 	def __init__(self, rfm):
 		self.__rfm = rfm
-		rfm.SetParams(
-			CallbackSync = self.__callback
-		)
 		threading.Thread.__init__(self)
 		
-	def __callback(self):
+	def callback(self):
 		lfsr = 0x1ff
 		frame = rfm.ReadFifoWait(1)
 		len = frame[0] ^ 0xFF #invert due to whitening
@@ -192,4 +189,4 @@ rxthread.daemon = True
 rxthread.start()
 		
 while True:
-	data = rfm.ReceivePacket(0)
+	data = rfm.StartRx(rxthread.callback)

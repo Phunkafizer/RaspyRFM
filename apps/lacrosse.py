@@ -1,19 +1,18 @@
 #!/usr/bin/env python2.7
 
-from rfm69 import Rfm69
-import rfm69
+import RaspyRFM
 import sensors
 from sensors import rawsensor
 import sys
 import time
 import threading
 
-if Rfm69.Test(1):
+if RaspyRFM.RaspyRFM.Test(1):
 	print("Found RaspyRFM twin")
-	rfm = Rfm69(1, 24) #when using the RaspyRFM twin
-elif Rfm69.Test(0):
+	rfm = RaspyRFM.RaspyRFM(1, 24) #when using the RaspyRFM twin
+elif RaspyRFM.RaspyRFM.Test(0):
 	print("Found RaspyRFM single")
-	rfm = Rfm69() #when using a single single 868 MHz RaspyRFM
+	rfm = RaspyRFM.RaspyRFM() #when using a single single 868 MHz RaspyRFM
 else:
 	print("No RFM69 module found!")
 	exit()
@@ -21,7 +20,7 @@ else:
 rfm.SetParams(
     Freq = 868.30, #MHz center frequency
     Datarate = 9.579, #kbit/s baudrate
-    ModulationType = rfm69.FSK, #modulation
+    ModulationType = RaspyRFM.FSK, #modulation
     Deviation = 30, #kHz frequency deviation
     SyncPattern = [0x2d, 0xd4], #syncword
     Bandwidth = 150, #kHz bandwidth
