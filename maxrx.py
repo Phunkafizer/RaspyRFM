@@ -65,6 +65,7 @@ rxThread.daemon = True
 rxThread.start()
 
 def Decode(frame):
+	print(frame)
 	#decode MAX! frame
 	cnt = frame[1]
 	flag = hex(frame[2])

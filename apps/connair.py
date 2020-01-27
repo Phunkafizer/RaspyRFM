@@ -1,7 +1,7 @@
 #!/usr/bin/env python2.7
 
 import socket
-import RaspyRFM
+from raspyrfm import *
 import sys
 
 UDP_IP = "0.0.0.0"
@@ -12,10 +12,10 @@ sock = socket.socket(socket.AF_INET, # Internet
                      socket.SOCK_DGRAM) # UDP
 sock.bind((UDP_IP, UDP_PORT))
 
-rfm = RaspyRFM.RaspyRFM()
-rfm.SetParams(
+rfm = RaspyRFM(1, RFM69)
+rfm.set_params(
     Freq = 433.92,
-    TXPower = 13,
+    TxPower = 13,
     ModulationType = rfm69.OOK,
     SyncPattern = [],
     )
@@ -24,7 +24,6 @@ print("Listening...")
 while True:
   data, addr = sock.recvfrom(1024) # buffer size is 1024 bytes
   print("received message from " + addr[0] + ': ' + str(data))
-  print(sock)
   msg = str(data).split(":")
 
   if msg[0] == "SEARCH HCGW":
@@ -59,5 +58,5 @@ while True:
     for i in range(bitleft):
       bindata[len(bindata) - 1] <<= 1  
 
-    rfm.SetParams(Datarate = 1000.0 / steplen)
-    rfm.SendPacket(bindata * rep)
+    rfm.set_params(Datarate = 1000.0 / steplen)
+    rfm.send_packet(bindata * rep)

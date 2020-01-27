@@ -1,23 +1,20 @@
 #!/usr/bin/env python2.7
 
-from rfm69 import Rfm69
-import rfm69
-import sensors
+from raspyrfm import *
 import sys
 import time
 
-if Rfm69.Test(1):
-    rfm = Rfm69(1, 24) #when using the RaspyRFM twin
-elif Rfm69.Test(0):
-    rfm = Rfm69() #when using a single single 868 MHz RaspyRFM
-else:
-    print "No RFM69 module found!"
-    exit()
+rfm = RaspyRFM(2, RFM69) #when using the RaspyRFM twin
+#elif Rfm69.Test(0):
+#    rfm = Rfm69() #when using a single single 868 MHz RaspyRFM
+#else:
+#    print "No RFM69 module found!"
+#    exit()
 
-rfm.SetParams(
+rfm.set_params(
     Freq = 868.350,
     Datarate = 5.0,
-    TXPower = -10,
+    TxPower = -10,
     ModulationType = rfm69.OOK,
     SyncPattern = [0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x38],
     Preamble = 0
@@ -27,7 +24,7 @@ data = []
 bitcnt = 0
 
 def AddBit(bit):
-    global data
+    global data	
     global bitcnt
     if bit:
         if ((len(data) * 8) - bitcnt) < 6:
@@ -81,5 +78,6 @@ def MakeFS20Frame(hc, adr, cmd):
 data = []
 bitcnt = 0
 MakeFS20Frame(int(sys.argv[1], 0), int(sys.argv[2], 0), int(sys.argv[3], 0))
+print(data)
 for x in range(3):
-    rfm.SendPacket(data)
+    rfm.send_packet(data)

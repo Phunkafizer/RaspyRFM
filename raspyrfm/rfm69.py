@@ -402,7 +402,7 @@ class Rfm69(threading.Thread):
 				self.__set_reg(RegOokPeak, 3<<6, value<<6)
 
 			elif key == "OokFixedThresh":
-				self.___write_reg(RegOokFix, value)
+				self.__write_reg(RegOokFix, value)
 
 			elif key == "OokPeakThreshDec":
 				self.__set_reg(RegOokPeak, 7<<0, value)
