@@ -9,42 +9,36 @@ import bistate24
 import fs20
 from argparse import ArgumentParser
 import wave, struct
+import threading
+import rcprotocols
 
 parser = ArgumentParser()
 parser.add_argument("-t", "--timebase", type=int, help=u"timebase in \u03bcs")
 parser.add_argument("-r", "--repeats", type=int, help=u"number of repetitions")
 parser.add_argument("-m", "--module", type=int, metavar="1-4", help=u"RaspyRFM module 1-4", default=1)
 parser.add_argument("-f", "--frequency", type=float, help=u"frequency in MHz", default=433.92)
+parser.add_argument("-p", "--protocol", help=u"Protocol for sending")
 parser.add_argument("-w", "--write", help=u"write wavefile")
-parser.add_argument("code", nargs='*', help="code, e. g. '000000000FFF', 'A 1 2 on' or '10111100011101011111111110001110'")
-args = parser.parse_args()
-
-protos = [
-	it32,
-	tristate,
-	bistate24,
-	fs20,
-]
+args, remainargs = parser.parse_known_args()
 
 txdata = None
-if len(args.code) > 0:
-	txdata = None
-	for proto in protos:
-		data = proto.Encode(args.code)
-		if data:
-			txdata = data
-			break
+if len(remainargs) > 0:
+	txdata = rcprotocols.encode(args.protocol, remainargs)
 
 	if txdata is None:
 		print("invalid code!")
 		exit()
 
+if not raspyrfm_test(args.module, RFM69):
+	print("Error! RaspyRFM not found")
+	exit()
+
 rfm = RaspyRFM(args.module, RFM69)
 rfm.set_params(
 	Freq = args.frequency, #MHz
 	Datarate = 20.0, #kbit/s
-	Bandwidth = 200, #kHz
-	SyncPattern = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1F],
+	Bandwidth = 300, #kHz
+	SyncPattern = [],
 	RssiThresh = -105, #dBm
 	ModulationType = rfm69.OOK,
 	OokThreshType = 1, #peak thresh
@@ -53,163 +47,79 @@ rfm.set_params(
 	TxPower = 13
 )
 
-wf = wave.open("out.wav", "wb")
-def rxcb():
-	while True:
-		d = rfm.read_fifo_wait(64)
-		ba = bytearray()
-		for s in d:
-			mask = 0x80
-			while mask > 0:
-				if (s & mask) > 0:
-					ba.append(255)
-				else:
-					ba.append(0)
-				mask >>= 1
-		wf.writeframesraw(ba)
-			
-if args.write:
-	wf.setnchannels(1)
-	wf.setsampwidth(1)
-	wf.setframerate(20000)
-	
-	rfm.set_params(
-		SyncPattern = [],
-		OokThreshType = 0, #fix thresh
-		OokFixedThresh = 85,
-	)
-	rfm.start_rx(rxcb)
-	
-	wf.writeframes('')
-	wf.close()
-	print("WRITE!")
-	exit()
-
-rfm.set_params(
-	SyncPattern = [],
-	Datarate = 1.63,
-)
-i=[
-	"01010011110011111110000111111111",
-	"01011101110011111110000111111111",
-	"01100011110011111110000111111111",
-	"01101101110011111110000111111111",
-]
-do=[]
-b=0
-db=0
-def addpulse(h, l):
-	global do, b, db
-	for i in range(h):
-		db <<= 1
-		db |= 1
-		b += 1
-		
-		if b == 8:
-			do.append(db)
-			db = 0
-			b = 0
-			
-	for i in range(l):
-		db <<= 1	
-		b += 1
-		
-		if b == 8:
-			do.append(db)
-			db = 0
-			b = 0
-
-for c in i[args.timebase]:
-	if c == '0':
-		addpulse(2, 1)
-	else:
-		addpulse(1, 2)
-addpulse(1, 17)
-#print(do, b)
-rfm.send_packet(do * 3)
-exit() 	 
-
-rfm.set_params(
-	Datarate = 20.0, #kbit/s
-	SyncPattern = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0F],
-)	
-
 if txdata:
 	rfm.set_params(
 		SyncPattern = [],
-		Datarate = 1000.0 / (args.timebase if args.timebase else txdata[2])
+		Datarate = 1000.0 / (args.timebase if args.timebase else txdata[1])
 	)
-	rep = (args.repeats if args.repeats else txdata[1])
-	rfm.send_packet(txdata[0] * rep)
+	rep = (args.repeats if args.repeats else txdata[2])
+	rfm.send(txdata[0] * rep)
 	print("Code sent!")
 	exit()
 
-def Decode(pulses):
-	for i in range(len(pulses)):
-		pulses[i] *= 50
+trainbuf = []
 
-	dec = None
-	for proto in protos:
-		dec = proto.Decode(pulses)
-		if dec:
-			print(dec)
-			
-	s = ""
-	if len(pulses) == 66:
-		for p in pulses:
-			if (p>900):
-					s += "l"
-			else:
-					s += "s"
-	b = ""
-	while len(s) > 0:
-		if s[:2] == "sl":
-			b += "1"
-		elif s[:2] == "ls":
-			b += "0"
+class RxThread(threading.Thread):
+	def __init__(self):
+		threading.Thread.__init__(self)
+
+	def __rxcb(self, rfm):
+		bit = False
+		cnt = 1
+		train = []
+		if args.write:
+			wf = wave.open(args.write, "wb")
+			wf.setnchannels(1)
+			wf.setsampwidth(1)
+			wf.setframerate(20000)
 		else:
-			b += "?"
-		s = s[2:]
-	#print(b)
-					
-	#print(len(pulses), pulses)
+			wf = None
 
-	#if not dec:
-	#	print("Len " + str(len(pulses)) + ": " + str(pulses))
+		while True:
+			fifo = rfm.read_fifo_wait(64)
+			ba = bytearray()
+
+			for b in fifo:
+				mask = 0x80
+				while mask != 0:
+					if (b & mask) != 0:
+						ba.append(245)
+					else:
+						ba.append(10)
+
+					if ((b & mask) != 0) == bit:
+						cnt += 1
+					else:
+						if cnt < 3: #<150 us
+							train *= 0 #clear
+						elif cnt > 50:
+							if not bit:
+								train.append(cnt)
+								if len(train) > 20:
+									trainbuf.append(list(train))
+							train *= 0 #clear
+						elif len(train) > 0 or bit:
+							train.append(cnt)
+						cnt = 1
+						bit = not bit
+					mask >>= 1
+
+			if wf:
+				wf.writeframesraw(ba)
+				wf.writeframes('')
+
+	def run(self):
+		rfm.start_receive(self.__rxcb)
+
+rxthread = RxThread()
+rxthread.daemon = True
+rxthread.start()
 
 while True:
-	data = rfm.receive_packet(260)
-	s = ""
+	time.sleep(0.1)
+	if len(trainbuf) > 0:
+		train = trainbuf.pop()
+		for i, v in enumerate(train):
+			train[i] = v * 50
 
-	pulsecount = 4
-	glitchcount = 0
-	bit = True
-	pulses = []
-
-	for d in data[0]:
-		s += format(d, '08b')
-		mask = 0x80
-		while mask > 0:
-			newbit = (d & mask) > 0
-
-			if glitchcount > 0:
-				glitchcount += 1
-				if newbit == bit:
-					pulsecount += glitchcount
-					glitchcount = 0
-				else:
-					if glitchcount == 3:
-						pulses.append(pulsecount)
-						if pulsecount > 50:
-							Decode(pulses)
-							pulses = []
-						bit = newbit
-						pulsecount = 3
-						glitchcount = 0
-			else:
-				if newbit == bit:
-					pulsecount += 1
-				else:
-					glitchcount = 1
-
-			mask >>= 1
+		rcprotocols.decode(train)

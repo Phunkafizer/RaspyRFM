@@ -34,7 +34,7 @@ class BaudChanger(threading.Thread):
 
 	def run(self):
 		while True:
-			time.sleep(15) 
+			time.sleep(15)
 			if self.baud:
 				dr = 9.579
 			else:
@@ -47,9 +47,8 @@ baudChanger = BaudChanger()
 baudChanger.daemon = True
 baudChanger.start()
 
-print "Waiting for sensors..."
 while 1:
-	data = rfm.receive_packet(5)
+	data = rfm.receive(5)
 	if data == None:
 		continue
 

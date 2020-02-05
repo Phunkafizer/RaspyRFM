@@ -6,40 +6,40 @@ import time
 FXOSC = 32E6
 FSTEP = FXOSC / (1<<19)
 
-#------ Raspberry RFM Module connection -----
+# Raspberry RFM Module connection
 # RaspyRFM single module
 # Connect to pins 17-26 on raspberry pi
-#-------------------------------------------------#
-# Raspi | Raspi | Raspi | RFM69 | RFM12 | PCB con #
-# Name	| GPIO	| Pin	| Name	|  Name |  Pin	  #
-#-------------------------------------------------#
-# 3V3	|	-	|  17	| 3.3V	| VDD	|	1	  #
-#  -	|  24	|  18	| DIO1	| FFIT	|	2	  # only when PCB jumper closed
-# MOSI	|  10	|  19	| MOSI	| SDI	|	3	  #
-# GND	|	-	|  20	| GND	| GND	|	4	  #
-# MISO	|	9	|  21	| MISO	| SDO	|	5	  #
-#  -	|  25	|  22	| DIO0	| nIRQ	|	6	  #
-# SCKL	|  11	|  23	| SCK	| SCK	|	7	  #
-# CE0	|	8	|  24	| NSS	| nSEL	|	8	  #
-# CE1	|	7	|  26	| DIO2	| nFFS	|  10	  # only when PCB jumper closed
-#-------------------------------------------------#
+#--------------------------------#
+#Raspi|Raspi|Raspi|RFM69|RaspyRFM#
+#Name |GPIO |Pin  |Name |PCB Pin #
+#--------------------------------#
+#3V3  |  -  | 17  |3.3V |   1    #
+# -   | 24  | 18  |DIO1 |   2    # only when PCB jumper closed
+#MOSI | 10  | 19  |MOSI |   3    #
+#GND  |  -  | 20  |GND  |   4    #
+#MISO |  9  | 21  |MISO |   5    #
+# -   | 25  | 22  |DIO0 |   6    #
+#SCKL | 11  | 23  |SCK  |   7    #
+#CE0  |  8  | 24  |NSS  |   8    #
+#CE1  |  7  | 26  |DIO2 |   10   # only when PCB jumper closed
+#--------------------------------#
 
 # RaspyRFM twin module with 10-pin connector
 # Connect to pins 17-26 on raspberry pi
-#-------------------------------------------------#
-# Raspi | Raspi | Raspi | RFM69 | RFM12 | PCB con #
-# Name	| GPIO	| Pin	| Name	|  Name |  Pin	  #
-#-------------------------------------------------#
-# 3V3	|	-	|  17	| 3.3V	| VDD	|	1	  #
-#  -	|  24	|  18	| DIO0_2| FFIT	|	2	  #
-# MOSI	|  10	|  19	| MOSI	| SDI	|	3	  #
-# GND	|	-	|  20	| GND	| GND	|	4	  #
-# MISO	|	9	|  21	| MISO	| SDO	|	5	  #
-#  -	|  25	|  22	| DIO0_1| nIRQ	|	6	  #
-# SCKL	|  11	|  23	| SCK	| SCK	|	7	  #
-# CE0	|	8	|  24	| NSS1	| nSEL	|	8	  #
-# CE1	|	7	|  26	| NSS2	| nFFS	|  10	  #
-#-------------------------------------------------#
+#---------------------------------#
+#Raspi|Raspi|Raspi|RFM69 |RaspyRFM#
+#Name |GPIO |Pin  |Name  |PCB Pin #
+#---------------------------------#
+#3V3  | -   | 17  |3.3V  |   1    #
+#  -  | 24  | 18  |DIO0_2|   2    #
+#MOSI | 10  | 19  |MOSI  |   3    #
+#GND  |  -  | 20  |GND   |   4    #
+#MISO | 9   | 21  |MISO  |   5    #
+# -   | 25  | 22  |DIO0_1|   6    #
+#SCKL | 11  | 23  |SCK   |   7    #
+#CE0  | 8   | 24  |NSS1  |   8    #
+#CE1  | 7   | 26  |NSS2  |   10	  #
+#---------------------------------#
 
 # RaspyRFM twin module with 12-pin connector
 # Connect to pins 15-26 on raspberry pi
@@ -441,7 +441,7 @@ class Rfm69(threading.Thread):
 					lfsr |= 1<<9
 				lfsr >>= 1
 
-	def send_packet(self, data):
+	def send(self, data):
 		self.__mutex.acquire()
 		self.__event.set()
 		self.mode_standby()
@@ -534,13 +534,13 @@ class Rfm69(threading.Thread):
 			if self.__mode == MODE_RX:
 				break;
 
-	def start_rx(self, cb):
+	def start_receive(self, cb):
 		self.__start_rx()
-		cb()
+		cb(self)
 		self.mode_standby()
 		self.__mutex.release()
 
-	def receive_packet(self, length):
+	def receive(self, length):
 		self.__start_rx()
 		result = self.read_fifo_wait(length)
 

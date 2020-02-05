@@ -1,7 +1,6 @@
 #!/usr/bin/env python2.7
 
-from rfm69 import Rfm69
-import rfm69
+from raspyrfm import *
 import sensors
 from sensors import rawsensor
 import sys
@@ -25,12 +24,12 @@ nodes = {
 	"f8": "Musikzimmer"
 }
 
-if Rfm69.Test(1):
+if raspyrfm_test(2, RFM69):
 	print("Found RaspyRFM twin")
-	rfm = Rfm69(1, 24) #when using the RaspyRFM twin
-elif Rfm69.Test(0):
+	rfm = RaspyRFM(2, RFM69) #when using the RaspyRFM twin
+elif raspyrfm_test(1, RFM69):
 	print("Found RaspyRFM single")
-	rfm = Rfm69() #when using a single single 868 MHz RaspyRFM
+	rfm = RaspyRFM(1, RFM69) #when using a single single 868 MHz RaspyRFM
 else:
 	print("No RFM69 module found!")
 	exit()
@@ -50,14 +49,14 @@ try:
 except:
 	print("mqtt init error")
 
-rfm.SetParams(
+rfm.set_params(
     Freq = 868.300, #MHz center frequency
     Datarate = 9.579, #kbit/s baudrate
     ModulationType = rfm69.FSK, #modulation
     Deviation = 30, #kHz frequency deviation OBW = 69.6/77.2 kHz, h = 6.3/3.5
     SyncPattern = [0x2d, 0xd4], #syncword
     Bandwidth = 100, #kHz bandwidth
-	#AfcBandwidth = 150,
+        #AfcBandwidth = 150,
 	#AfcFei = 0x0E,
     RssiThresh = -100, #-100 dB RSSI threshold
 )
@@ -103,7 +102,7 @@ def writeInflux(payload):
 print "Waiting for sensors..."
 cache = {}
 while 1:
-	rxObj = rfm.ReceivePacket(7)
+	rxObj = rfm.receive(7)
 
 	try:
 		sensorObj = rawsensor.CreateSensor(rxObj)
