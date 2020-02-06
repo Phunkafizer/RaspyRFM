@@ -116,6 +116,7 @@ RegBroadcastAdrs = 0x3A
 RegAutoModes = 0x3B
 RegFifoThresh = 0x3C
 RegPacketConfig2 = 0x3D
+RegAesKey1 = 0x3E
 RegTemp1 = 0x4E
 RegTemp2 = 0x4F
 RegTestLna = 0x58
@@ -358,6 +359,14 @@ class Rfm69(threading.Thread):
 				self.__write_reg(RegSyncConfig,	 conf)
 				for i, d in enumerate(value):
 					self.__write_reg(RegSyncValue1 + i, d)
+					
+			elif key == "AesKey":
+				if (len(value)) > 0:
+					self.__set_reg(RegPacketConfig2, 1<<0, 1<<0) #AES on
+				else:
+					self.__set_reg(RegPacketConfig2, 1<<0, 0<<0) #AES off
+				for i, d in enumerate(value):
+					self.__write_reg(RegAesKey1 + i, d)
 
 			elif key == "Bandwidth":
 				RxBw = FXOSC / value / 1000 / 4
@@ -463,7 +472,7 @@ class Rfm69(threading.Thread):
 		if self.__packet_format == PacketFormat_Variable:
 			data.insert(0, len(data))
 		else:
-			self.__write_reg(RegPayloadLength, 0) #unlimited length
+			self.__write_reg(RegPayloadLength, 0 if len(data) > 255 else len(data))
 		self.__write_reg(RegFifoThresh, 0x80 | self.__fifothresh) #start TX with 1st byte in FIFO
 		self.__set_dio_mapping(0, DIO0_PM_SENT) #DIO0 -> PacketSent
 		self.__set_mode(MODE_TX)
