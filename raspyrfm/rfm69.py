@@ -43,22 +43,22 @@ FSTEP = FXOSC / (1<<19)
 
 # RaspyRFM twin module with 12-pin connector
 # Connect to pins 15-26 on raspberry pi
-#-------------------------------------------------#
-# Raspi | Raspi | Raspi | RFM69 | RFM12 | PCB con #
-# Name	| GPIO	| Pin	| Name	|  Name |  Pin	  #
-#-------------------------------------------------#
-#  -	|  22	|  15	| DIO2_2|		|	1	  #
-#  -	|  23	|  16	| DIO2_1|		|	2	  #
-# 3V3	|	-	|  17	| 3.3V	| VDD	|	3	  #
-#  -	|  24	|  18	| DIO0_2| FFIT	|	4	  #
-# MOSI	|  10	|  19	| MOSI	| SDI	|	5	  #
-# GND	|	-	|  20	| GND	| GND	|	6	  #
-# MISO	|	9	|  21	| MISO	| SDO	|	7	  #
-#  -	|  25	|  22	| DIO0_1| nIRQ	|	8	  #
-# SCKL	|  11	|  23	| SCK	| SCK	|	9	  #
-# CE0	|	8	|  24	| NSS1	| nSEL	|	10	  #
-# CE1	|	7	|  26	| NSS2	| nFFS	|	12	  #
-#-------------------------------------------------#
+#---------------------------------#
+#Raspi|Raspi|Raspi|RFM69 |RaspyRFM#
+#Name |GPIO |Pin  |Name  |PCB Pin #
+#---------------------------------#
+#  -  | 22  | 15  |DIO2_2|   1    #
+#  -  | 23  | 16  |DIO2_1|   2    #
+#3V3  | -   | 17  |3.3V  |   3    #
+#  -  | 24  | 18  |DIO0_2|   4    #
+#MOSI | 10  | 19  |MOSI  |   5    #
+#GND  | -   | 20  |GND   |   6    #
+#MISO | 9   | 21  |MISO  |   7    #
+#  -  | 25  | 22  |DIO0_1|   8    #
+#SCKL | 11  | 23  |SCK   |   9    #
+#CE0  | 8   | 24  |NSS1  |   10   #
+#CE1  | 7   | 26  |NSS2  |   12   #
+#---------------------------------#
 
 #RFM69 registers
 #common registers
@@ -152,6 +152,10 @@ DIO0_PM_SENT = 0
 DIO0_PM_TXDONE = 1
 DIO0_PM_PLLLOCK = 3
 
+#Packet format
+PacketFormat_Fixed = 0
+PacketFormat_Variable = 1
+
 class Rfm69(threading.Thread):
 	@staticmethod
 	def test(cs, gpio_dio0):
@@ -187,6 +191,7 @@ class Rfm69(threading.Thread):
 		self.__mutex = threading.Lock()
 		self.__syncsize = 4
 		self.__fifothresh = 32
+		self.__packet_format = PacketFormat_Fixed
 
 		print("RFM69 found on CS " + str(cs))
 		GPIO.setmode(GPIO.BCM)
@@ -407,6 +412,10 @@ class Rfm69(threading.Thread):
 			elif key == "OokPeakThreshDec":
 				self.__set_reg(RegOokPeak, 7<<0, value)
 
+			elif key == "PacketFormat":
+				self.__set_reg(RegPacketConfig1, 1<<7, value<<7)
+				self.__packet_format = value
+
 			else:
 				print("Unrecognized option >>" + key + "<<")
 
@@ -451,8 +460,10 @@ class Rfm69(threading.Thread):
 		while (status & 0x40 == 0x40):
 			self.read_reg(RegFifo)
 			status = self.read_reg(RegIrqFlags2)
-
-		self.__write_reg(RegPayloadLength, 0) #unlimited length
+		if self.__packet_format == PacketFormat_Variable:
+			data.insert(0, len(data))
+		else:
+			self.__write_reg(RegPayloadLength, 0) #unlimited length
 		self.__write_reg(RegFifoThresh, 0x80 | self.__fifothresh) #start TX with 1st byte in FIFO
 		self.__set_dio_mapping(0, DIO0_PM_SENT) #DIO0 -> PacketSent
 		self.__set_mode(MODE_TX)
@@ -518,10 +529,10 @@ class Rfm69(threading.Thread):
 		self.__mutex.release()
 		return thresh
 
-	def __start_rx(self):
+	def __start_rx(self, length):
 		self.__mutex.acquire()
 		while True:
-			self.__write_reg(RegPayloadLength, 0) #unlimited length
+			self.__write_reg(RegPayloadLength, length)
 			self.__write_reg(RegFifoThresh, self.__fifothresh)
 			if self.__syncsize > 0:
 				self.__set_dio_mapping(0, DIO0_PM_SYNC) #DIO0 -> SyncAddress
@@ -535,13 +546,15 @@ class Rfm69(threading.Thread):
 				break;
 
 	def start_receive(self, cb):
-		self.__start_rx()
+		self.__start_rx(0)
 		cb(self)
 		self.mode_standby()
 		self.__mutex.release()
 
 	def receive(self, length):
-		self.__start_rx()
+		self.__start_rx(length)
+		if self.__packet_format == PacketFormat_Variable:
+			length = self.read_fifo_wait(1)[0]
 		result = self.read_fifo_wait(length)
 
 		rssi = -self.read_reg(RegRssiValue) / 2

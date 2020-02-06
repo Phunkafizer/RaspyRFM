@@ -1,7 +1,6 @@
 #!/usr/bin/env python2.7
 
-from rfm69 import Rfm69
-import rfm69
+from raspyrfm import *
 import sys
 import time
 import threading
@@ -16,23 +15,23 @@ devices = {
 	'0x1ac36b': 'HeatWohnL',
 }
 
-if Rfm69.Test(1):
+if raspyrfm_test(2, RFM69):
 	print("Found RaspyRFM twin")
-	rfm = Rfm69(1, 24) #when using the RaspyRFM twin
-elif Rfm69.Test(0):
+	rfm = RaspyRFM(2, RFM69) #when using the RaspyRFM twin
+elif raspyrfm_test(1, RFM69):
 	print("Found RaspyRFM single")
-	rfm = Rfm69() #when using a single single 868 MHz RaspyRFM
+	rfm = RaspyRFM(1, RFM69) #when using a single single 868 MHz RaspyRFM
 else:
 	print("No RFM69 module found!")
 	exit()
 
-rfm.SetParams(
+rfm.set_params(
 	Freq = 868.300, #MHz center frequency
 	ModulationType = rfm69.FSK, #modulation
 	Datarate = 9.992, #kbit/s baudrate
 	Deviation = 19.042, #kHz frequency deviation
 	SyncPattern = [0xc6, 0x26, 0xc6, 0x26], #syncword
-	Bandwidth = 100, #kHz bandwidth
+	Bandwidth = 150, #kHz bandwidth
 	RssiThresh = -105, #dBm RSSI threshold
 )
 
@@ -45,10 +44,10 @@ class RxThread(threading.Thread):
 		self.__rfm = rfm
 		threading.Thread.__init__(self)
 
-	def __callback(self):
-		frame = rfm.ReadFifoWait(1)
+	def __callback(self, rfm):
+		frame = rfm.read_fifo_wait(1)
 		len = frame[0] ^ 0xFF #invert due to whitening
-		frame += rfm.ReadFifoWait(len)
+		frame += rfm.read_fifo_wait(len)
 
 		rxMutex.acquire()
 		rxFifo.append(frame)
@@ -57,7 +56,7 @@ class RxThread(threading.Thread):
 
 	def run(self):
 		while True:
-			self.__rfm.StartRx(self.__callback)
+			self.__rfm.start_receive(self.__callback)
 
 
 rxThread = RxThread(rfm)
@@ -122,7 +121,7 @@ while True:
 		left = len(rxFifo) > 0
 		rxMutex.release()
 
-		rfm.WhitenTI(frame)
+		rfm.whiten_ti(frame)
 		Decode(frame)
 		if not left:
 			break
