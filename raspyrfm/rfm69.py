@@ -193,6 +193,7 @@ class Rfm69(threading.Thread):
 		self.__syncsize = 4
 		self.__fifothresh = 32
 		self.__packet_format = PacketFormat_Fixed
+		self.__aes_on = False
 
 		print("RFM69 found on CS " + str(cs))
 		GPIO.setmode(GPIO.BCM)
@@ -363,8 +364,10 @@ class Rfm69(threading.Thread):
 			elif key == "AesKey":
 				if (len(value)) > 0:
 					self.__set_reg(RegPacketConfig2, 1<<0, 1<<0) #AES on
+					self.__aes_on = True
 				else:
 					self.__set_reg(RegPacketConfig2, 1<<0, 0<<0) #AES off
+					self.__aes_on = False
 				for i, d in enumerate(value):
 					self.__write_reg(RegAesKey1 + i, d)
 
@@ -564,6 +567,10 @@ class Rfm69(threading.Thread):
 		self.__start_rx(length)
 		if self.__packet_format == PacketFormat_Variable:
 			length = self.read_fifo_wait(1)[0]
+
+		if self.__aes_on:
+			self.__set_dio_mapping(0, DIO0_PM_PAYLOAD) #DIO0 -> payload OK
+			self.__wait_int()
 		result = self.read_fifo_wait(length)
 
 		rssi = -self.read_reg(RegRssiValue) / 2
