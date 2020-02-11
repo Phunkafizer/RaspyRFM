@@ -36,7 +36,7 @@ else:
 
 try:
 	from influxdb import InfluxDBClient
-	influxClient = InfluxDBClient(host='localhost', port=8086, username='admin', password='admin')
+	influxClient = InfluxDBClient(host='localhost', port=8086, username='admin', password='raspberry')
 	influxClient.switch_database("sensors")
 except:
 	print("influx init error")
@@ -71,9 +71,9 @@ class BaudChanger(threading.Thread):
 			time.sleep(15) 
 			print "Change"
 			if self.baud:
-				rfm.SetParams(Datarate = 9.579)
+				rfm.set_params(Datarate = 9.579)
 			else:
-				rfm.SetParams(Datarate = 17.241)
+				rfm.set_params(Datarate = 17.241)
 			self.baud = not self.baud
 
 baudChanger = BaudChanger()
@@ -99,6 +99,7 @@ def writeInflux(payload):
 
 	influxClient.write_points([wr])
 
+time.sleep(4)
 print "Waiting for sensors..."
 cache = {}
 while 1:
