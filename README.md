@@ -14,8 +14,8 @@ pip install -e .
 #Using python module and set parameters
 ```python
 import RasyRFM
-rfm = RaspyRFM.RaspyRFM()
-rfm.SetParams(
+rfm = RaspyRFM(1, RFM69)
+rfm.set_params(
         Freq = 868.300, #MHz center frequency
         ModulationType = rfm69.FSK, #modulation
         Datarate = 9.992, #kbit/s baudrate
@@ -54,6 +54,16 @@ usage example:
 ./rcpulse 0000FFFF0FFF
 ./rcpulse 11110000111100001111000010 0 1110 on
 ./rcpulse 11110000111100001111000010010000
+```
+
+## Receive 433 MHz RC remote controls
+```sh
+./rcpulse.py
+```
+
+## Receive 868 MHz ELV FS20 RC remote controls
+```sh
+./rcpulse -f 868.35
 ```
 
 ## lacrosse.py

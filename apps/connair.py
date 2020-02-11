@@ -49,14 +49,14 @@ while True:
         if bitleft == 0:
           bitleft = 8
           bindata.append(0x00)
-      
+
         bindata[len(bindata) - 1] <<= 1
         if bit:
           bindata[len(bindata) - 1] |= 0x01
         bitleft -= 1
       bit = not bit
     for i in range(bitleft):
-      bindata[len(bindata) - 1] <<= 1  
+      bindata[len(bindata) - 1] <<= 1
 
     rfm.set_params(Datarate = 1000.0 / steplen)
-    rfm.send_packet(bindata * rep)
+    rfm.send(bindata * rep)
