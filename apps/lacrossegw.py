@@ -13,12 +13,14 @@ import os
 
 nodes = {
 	"0": "Kuehlschrank",
+	"18": "Eisfach",
 	"c0": "Kueche",
 	"b0": "Kinderzimmer",
 	"4c": "Aussen",
-	"50": "Aussen 2",
+	"1c": "Aussen 2",
 	"54": "Schlafzimmer",
 	"70": "Wohnzimmer",
+	"a8": "Treppenhaus",
 	"e0": "Badezimmer",
 	"f0": "MuFu",
 	"f8": "Musikzimmer"
@@ -36,9 +38,11 @@ else:
 
 try:
 	from influxdb import InfluxDBClient
-	influxClient = InfluxDBClient(host='localhost', port=8086, username='admin', password='raspberry')
+	influxClient = InfluxDBClient(host='localhost', port=8086, username='admin', password='admin')
 	influxClient.switch_database("sensors")
+	influxClient.get_list_measurements()
 except:
+	influxClient = None
 	print("influx init error")
 
 try:
@@ -47,6 +51,7 @@ try:
 	mqttClient.connect("localhost", 1883, 60)
 	mqttClient.loop_start()
 except:
+	mqttClient = None
 	print("mqtt init error")
 
 rfm.set_params(
@@ -81,6 +86,8 @@ baudChanger.daemon = True
 baudChanger.start()
 
 def writeInflux(payload):
+	if not influxClient:
+		return
 	T = payload["T"]
 	wr = {
 		"measurement": "lacrosse",
@@ -181,11 +188,13 @@ while 1:
 	print(payload)
 
 	try:
-		writeInflux(payload)
+		if influxClient:
+			writeInflux(payload)
 	except:
 		pass
 
 	try:
-		mqttClient.publish('home/lacrosse/'+ payload['ID'], json.dumps(payload))
+		if mqttClient:
+			mqttClient.publish('home/lacrosse/'+ payload['ID'], json.dumps(payload))
 	except:
 		pass
