@@ -122,4 +122,8 @@ while True:
 		for i, v in enumerate(train):
 			train[i] = v * 50
 
-		rcprotocols.decode(train)
+		dec = rcprotocols.decode(train)
+		if (dec):
+			print(dec)
+		else:
+			print(train)

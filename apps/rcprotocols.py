@@ -1,5 +1,7 @@
 import re
 from argparse import ArgumentParser
+from raspyrfm import *
+import threading
 
 class RcProtocol:
 	def __init__(self):
@@ -390,9 +392,9 @@ class Voltcraft(RcProtocol):
 		self._add_finish()
 		return self._ookdata
 		
-class Test(RcProtocol): 
+class PDM32(RcProtocol): 
 	def __init__(self):
-		self._name = "test"
+		self._name = "pdm32"
 		self._timebase = 600
 		self._repetitions = 4
 		self._pattern = "[01]{32}"
@@ -401,58 +403,15 @@ class Test(RcProtocol):
 			'0': [2, 1],
 		}
 		RcProtocol.__init__(self)
-		self._parser.add_argument("-i", "--id", type=int, required=True)
-		self._parser.add_argument("-u", "--unit", type=int, required=True)
-		self._parser.add_argument("-s", "--state", type=int, required=True)
 
 	def decode(self, pulsetrain):
 		code, tb = self._decode_symbols(pulsetrain[0:-2])
 		if code:
-			print(code)
-			return code
-			state = int(code[20:21])
-			unit = int(code[21:24], 2)
-			all = False
-			if unit == 7:
-				unit = 1
-			elif unit == 3:
-				unit = 2
-			elif unit == 5:
-				unit = 3
-			elif unit == 6:
-				unit = 4
-			else:
-				unit = 0
-				state = not state
-
 			return {
 				"protocol": self._name,
 				"code": code,
 				"timebase": tb,
-				"id": int(code[0:20], 2),
-				"unit": unit,
-				"state": state,
 			}
-
-	def encode(self, args):
-		sym = '{:020b}'.format(args.id)
-
-		if args.unit == 1:
-			unit = 7
-		elif args.unit == 2:
-			unit = 3
-		elif args.unit == 3:
-			unit = 5
-		elif args.unit == 4:
-			unit = 6
-		else:
-			raise Exception("invalid unit")
-		sym += '1' if args.state > 0 else '0'
-		sym += '{:03b}'.format(unit)
-		self._add_symbols(sym)
-		self._add_pulses([1, 31])
-		self._add_finish()
-		return self._ookdata
 
 protocols = [
 	IT32(),
@@ -461,7 +420,7 @@ protocols = [
 	Voltcraft(),
 	FS20(),
 	Emylo(),
-	Test(),
+	PDM32(),
 ]
 
 def encode(protocol, args):
@@ -472,11 +431,75 @@ def encode(protocol, args):
 
 def decode(pulsetrain):
 	dec = None
+	res = []
 	for p in protocols:
 		dec = p.decode(pulsetrain)
 		if dec:
-			print(dec)
+			res.append(dec)
 
-	if not dec:
-		print(len(pulsetrain), pulsetrain)
+	if len(res) > 0:
+		return res
 		
+class PulseReceiver(threading.Thread):
+	def __init__(self, module):
+		self.__trainbuf = []
+		self.__rfm = RaspyRFM(module, RFM69)
+		self.__rfm.set_params(
+			Freq = 433.92, #MHz
+			Datarate = 20.0, #kbit/s
+			Bandwidth = 300, #kHz
+			SyncPattern = [],
+			RssiThresh = -105, #dBm
+			ModulationType = rfm69.OOK,
+			OokThreshType = 1, #peak thresh
+			OokPeakThreshDec = 3,
+			Preamble = 0,
+			TxPower = 13
+		)
+		threading.Thread.__init__(self)
+		self.daemon = True
+		self.start()
+		
+	def getEvents(self):
+		if len(self.__trainbuf) > 0:
+			train = self.__trainbuf.pop()
+			for i, v in enumerate(train):
+				train[i] = 50 * v;
+			return decode(train)
+		
+	def run(self):
+		self.__rfm.start_receive(self.__cb)
+	
+	def __cb(self, rfm):
+		bit = False
+		cnt = 1
+		train = []
+		
+		while True:
+			fifo = rfm.read_fifo_wait(64)
+			ba = bytearray()
+
+			for b in fifo:
+				mask = 0x80
+				while mask != 0:
+					if (b & mask) != 0:
+						ba.append(245)
+					else:
+						ba.append(10)
+
+					if ((b & mask) != 0) == bit:
+						cnt += 1
+					else:
+						if cnt < 3: #<150 us
+							train *= 0 #clear
+						elif cnt > 50:
+							if not bit:
+								train.append(cnt)
+								if len(train) > 20:
+									self.__trainbuf.append(list(train))
+							train *= 0 #clear
+						elif len(train) > 0 or bit:
+							train.append(cnt)
+						cnt = 1
+						bit = not bit
+					mask >>= 1
