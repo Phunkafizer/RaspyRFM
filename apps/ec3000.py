@@ -6,7 +6,7 @@ import time
 
 try:
 	from influxdb import InfluxDBClient
-	influxClient = InfluxDBClient(host='localhost', port=8086, username='admin', password='admin')
+	influxClient = InfluxDBClient(host='raspberrypi', port=8086, username='admin', password='admin')
 	influxClient.switch_database("sensors")
 	influxClient.get_list_measurements()
 except:
@@ -22,7 +22,7 @@ elif raspyrfm_test(1, RFM69):
 else:
 	print("No RFM69 module found!")
 	exit()
-	
+
 rfm.set_params(
 	Freq = 868.300, #MHz center frequency
 	Datarate = 20, #kbit/s baudrate
@@ -74,7 +74,7 @@ def unstuffrev(datain):
 				oby = 0
 	if obi > 0:
 		result.append(oby >> (8 - obi))
-		
+
 	return result
 
 
@@ -112,9 +112,6 @@ def calcword(datain):
 		result <<= 8
 		result |= d
 	return result
-
-client = InfluxDBClient(host='localhost', port=8086, username='admin', password='admin')
-client.switch_database("sensors")
 
 print "Waiting for sensors..."
 while 1:
