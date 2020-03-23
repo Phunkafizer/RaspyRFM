@@ -61,7 +61,7 @@ class lacross(rawsensor):
                 self._data['AFC'] = data[2]
 
         def __str__(self):
-                res = 'La crosse ' + str(self._data) # + ' ' + rawsensor.__str__(self);
+                res = 'La crosse ' + str(self._data)
                 return res; 
 
         @staticmethod
@@ -75,17 +75,18 @@ class lacross(rawsensor):
 class emt7110(rawsensor):
         def __init__(self, data):
                 rawsensor.__init__(self, data)
-                id = data[0] << 24 | data[1] << 16 | data[2] << 8 | data[3]
+                _data = data[0]
+                id = _data[0] << 24 | _data[1] << 16 | _data[2] << 8 | _data[3]
                 self._data['ID'] = hex(id)[2:]
-                self._data['P'] = (((data[4] << 8 | data[5]) & 0x3FFF) / 2.0, 'W')
-                self._data['U'] = (data[8] / 2.0 + 128, 'V')
-                self._data['I'] = (data[6] << 8 | data[7], 'mA')
-                self._data['W'] = (((data[9] << 8 | data[10]) & 0x3FFF) / 100, 'kWh')
+                self._data['P'] = (((_data[4] << 8 | _data[5]) & 0x3FFF) / 2.0, 'W')
+                self._data['U'] = (_data[8] / 2.0 + 128, 'V')
+                self._data['I'] = (_data[6] << 8 | _data[7], 'mA')
+                self._data['W'] = (((_data[9] << 8 | _data[10]) & 0x3FFF) / 100, 'kWh')
 
         def __str__(self):
                 return 'emt7110 ' + str(self._data)
 
         @staticmethod
         def Create(data):
-                if len(data) >= 12 and len(data) <= 20 and csum(data) == 0:
+                if len(data[0]) >= 12 and len(data[0]) <= 20 and csum(data[0]) == 0:
                         return emt7110(data)

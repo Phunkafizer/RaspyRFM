@@ -48,7 +48,7 @@ baudChanger.daemon = True
 baudChanger.start()
 
 while 1:
-	data = rfm.receive(5)
+	data = rfm.receive(12)
 	if data == None:
 		continue
 
