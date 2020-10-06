@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.27.0/moment.min.js" integrity="sha512-rmZcZsyhe0/MAjquhTgiUcb4d9knaFc7b5xAfju483gbEXTkeJRUMIPk6s3ySZMYUHEcjKbjLjyddGWMrNEvZg==" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@2.8.0"></script>
+    
+
+    <style>
+        body {
+            background-color: #161719;
+        }
+        .container {
+            margin-top: 1em;
+        }
+
+        div.sensorpanel {
+            padding: 0.2em;
+        }
+        div.sensor {
+            background-color: #212124;
+            padding: 0.5em;
+        }
+        div.sensorheader {
+            font-size: 0.7em;
+            color: lightslategrey;
+        }
+
+        .measure {
+            align-items: baseline;
+        }
+
+        div.measure .measurevalue  {
+            width: 2.5em;
+            font-size: 1.1em;
+            color: whitesmoke;
+        }
+
+        div.measure .measureunit {
+            color: lightslategray;
+            font-size: 0.7em;
+            margin-right: 1em;
+        }
+
+        .measurevalue.high, .measurevalue.low {
+            color: firebrick !important;
+            font-weight: bold;
+        }
+
+        .sensor.selected {
+            background-color: #235;
+        }
+
+        span.material-icons {
+            padding-right: 0.1em;
+            font-size: 1.2em;
+        }
+    </style>
+
+    <title>Raumklima</title>
+  </head>
+  <body>
+    <div id="grid" class="container">
+        <div id="sensorrow" class="row"></div>
+        <hr/>
+        <div id="detailrow" class="row"></div>
+        <div class="row"><canvas id="myChart"></canvas></div>
+        <div class="row"><canvas id="ahChart"></canvas></div>
+    </div>
+  </body>
+</html>
+
+<script>
+    var 
+        detailId = null;
+    
+    function drawDetails(sensor) {
+        function createMeasure(name, field, unit) {
+            var v = sensor.hasOwnProperty(field) ? sensor[field] : "---";
+            return $("<div>").addClass("col-4 col-sm-3 col-md-2 col-lg-1")
+                .append($("<div>").addClass("sensorheader d-flex justify-content-between")
+                    .append($("<div>")
+                        .addClass('sensortitle')
+                        .text(name)
+                    )  
+                )
+                .append($("<div>").addClass("measure d-flex justify-content-between")
+                    .append($("<span>").addClass("measurevalue").text(v))
+                    .append($("<span>").addClass("measureunit").text(unit))
+                );
+        }
+
+        $("#detailrow")
+            .html($("<div>").addClass("sensorpanel col-12")
+                .append($("<div>").addClass("sensor row")
+                    .append(createMeasure("ID", "ID", ""))
+                    .append(createMeasure("Temp.", "T", "°C"))
+                    .append(createMeasure("RH", "RH", "%"))
+                    .append(createMeasure("AH", "AH", "g/m³"))
+                    .append(createMeasure("AHratio", "AHratio", "%"))
+                    .append(createMeasure("Taupunkt", "DEW", "°C"))
+                    .append(createMeasure("TF80", "DEW80", "°C"))
+                    .append(createMeasure("TF60", "DEW60", "°C"))
+                    .append($("<button>").attr('type', 'button').addClass('btn btn-primary btn-sm').text('setup'))
+                )
+            );
+    }
+
+    function drawChart(sensor) {
+        var tData = [];
+        var rhData = [];
+
+        $.getJSON("/history",
+            {'name': sensor['room']},
+            function(data) {
+                $.each(data, function(idx, val) {
+                    tData.push({
+                        't': val[0],
+                        'y': val[1]
+                    });
+                    rhData.push({
+                        't': val[0],
+                        'y': val[2]
+                    });
+                });
+
+                var ctx = $("#myChart");
+                var chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        datasets: [{
+                            label: 'T',
+                            borderColor: '#aaa',
+                            pointRadius: 0,
+                            tension: 0,
+                            data: tData,
+                            yAxisID: 'yax1'
+                        }, {
+                            label: 'RH',
+                            borderColor: '#54a',
+                            pointRadius: 0,
+                            data: rhData,
+                            yAxisID: 'yax2'
+                        }]
+                    },
+                    options: {
+                        scales: {
+                            xAxes: [{
+                                type: 'time',
+                                display: true
+                            }],
+                            yAxes: [{
+                                position: 'left',
+                                id: 'yax1',
+                                ticks: {
+                                    suggestedMin: 18,
+                                    suggestedMax: 25
+                                },
+                                scaleLabel: {
+                                    display: true,
+                                    labelString: 'T / °C'
+                                }
+                            },{
+                                position: 'right',
+                                id: 'yax2',
+                                ticks: {
+                                    suggestedMin: 40,
+                                    suggestedMax: 90
+                                },
+                                scaleLabel: {
+                                    display: true,
+                                    labelString: 'RH / %'
+                                }
+                            }]
+                        },
+                        animation: {
+                            duration: 0
+                        }
+                    }
+                });
+            }
+        );
+    }
+
+    function loadValues() {
+        $.getJSON("/data", function(data) {
+            var humData = {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'RH',
+                        backgroundColor: [],
+                        data: [],
+                        barPercentage: 0.8
+                    },
+                    {
+                        label: 'RHvent',
+                        backgroundColor: '#669',
+                        data: [],
+                        barPercentage: 0.2
+                    }
+                ]
+            };
+
+            $("#sensorrow").empty();
+            $.each(data["sensors"], function(idx, val) {
+                var t = 'T' in val ? val["T"] : '---';
+                var rh = ('RH' in val) ? val["RH"] : '---';
+                var ah = ('AH' in val)  ? val["AH"] : '---';
+                var rhStatus = val["rhStatus"] == "high" ? "high" : val["rhStatus"] == "low" ? "low" : "";
+                var tStatus = val["tStatus"] == "high" ? "high" : val["tStatus"] == "low" ? "low" : "";
+                var ahRat = 'AHratio' in val ? val["AHratio"] : '---';
+
+                $("#sensorrow")
+                    .append($("<div>").addClass("sensorpanel col-6 col-sm-4 col-md-3 col-lg-2")
+                        .append($("<div>").addClass("sensor").data("ID", val["ID"]).data("values", val)
+                            .append($("<div>").addClass("sensorheader d-flex justify-content-between")
+                                .append($("<div>")
+                                    .addClass('sensortitle')
+                                    .text('room' in val ? val["room"] : val["ID"])
+                                )
+                                .append($("<div>")
+                                    .addClass('sensoricons')
+                                    .append($("<span>").addClass('material-icons text-warning').text(val["batlo"] ? 'battery_alert' : ''))
+                                    .append($("<span>").addClass('material-icons text-success').text(val["comfort"] == 'good' ? 'sentiment_satisfied' : ''))
+                                    .append($("<span>").addClass('material-icons text-warning').text(val["comfort"] == 'moderate' ? 'sentiment_neutral' : ''))
+                                    .append($("<span>").addClass('material-icons text-danger').text(val["comfort"] == 'bad' ? 'sentiment_very_dissatisfied' : ''))
+                                    .append($("<span>").addClass('material-icons').text(val["window"] == 'open' ? 'cloud_queue' : ''))
+                                    .append($("<span>").addClass('material-icons').text(val["window"] == 'close' ? 'cloud_off' : ''))
+                                    .append($("<span>").addClass('material-icons text-warning').text(val["init"] ? 'fiber_new' : ''))
+                                )
+                            )
+                            .append($("<div>").addClass("measures d-flex")
+                                .append($("<div>").addClass("measure flex-fill d-flex justify-content-between")
+                                    .append($("<span>").addClass("measurevalue").addClass(tStatus).text(t))
+                                    .append($("<span>").addClass("measureunit").text("°C"))
+                                )
+                                .append($("<div>").addClass("measure flex-fill d-flex justify-content-between")
+                                    .append($("<span>").addClass("measurevalue").addClass(rhStatus).text(rh))
+                                    .append($("<span>").addClass("measureunit").text("%"))
+                                )
+                            )
+                        )
+                    ); 
+
+                if (val["RHvent"] !== undefined) {
+                    humData.labels.push(val['room']);
+                    humData.datasets[0].data.push(val['RH']);
+                    switch (val["rhStatus"]) {
+                        case 'high':
+                        case 'low':
+                            humData.datasets[0].backgroundColor.push('#A00'); 
+                            break;
+                        case 'ok':
+                            humData.datasets[0].backgroundColor.push('#394'); 
+                            break;
+                        default:
+                            humData.datasets[0].backgroundColor.push('#444'); 
+                            break;
+                    }  
+                    humData.datasets[1].data.push(val['RHvent']);
+                }
+            });
+
+            $("div.sensor")
+                .click(function() {
+                    $("div.sensor").removeClass("selected");
+                    $(this).addClass("selected");
+                    var val = $(this).data("values");
+                    detailId = ($(this).data("values").ID);
+                    drawDetails($(this).data("values"));
+                    drawChart(val);
+                })
+                .each(function (index, element) {
+                    if (detailId == $(element).data('values').ID) {
+                        $(element).click();
+                        return false;
+                    }
+                });
+
+            var ctx2 = $("#ahChart");
+            var chart2 = new Chart(ctx2, {
+                type: 'bar',
+                data: humData,
+                options: {
+                    scales: {
+                        yAxes: [
+                            {
+                                position: 'left',
+                                id: 'yax1',
+                                ticks: {
+                                    suggestedMin: 0,
+                                    suggestedMax: 80
+                                },
+                                scaleLabel: {
+                                    display: true,
+                                    labelString: 'RH / %'
+                                }
+                            }
+                        ]
+                    },
+                    animation: {
+                        duration: 0
+                    }
+                }
+            });
+        });
+    }
+
+    $(function() {
+        loadValues();
+        
+        setInterval(function() {
+            loadValues();
+        }, 5000);
+    });
+</script>

@@ -1,4 +1,5 @@
 #!/usr/bin/env python2.7
+# -*- coding: utf-8 -*-
 
 from raspyrfm import *
 import sensors
@@ -9,22 +10,15 @@ import threading
 import math
 import json
 from datetime import datetime
-import os
+#import os
+import SocketServer
+import SimpleHTTPServer
+import urlparse
 
-nodes = {
-	"0": "Kuehlschrank",
-	"18": "Eisfach",
-	"c0": "Kueche",
-	"b0": "Kinderzimmer",
-	"4c": "Aussen",
-	"1c": "Aussen 2",
-	"54": "Schlafzimmer",
-	"70": "Wohnzimmer",
-	"a8": "Treppenhaus",
-	"e0": "Badezimmer",
-	"f0": "MuFu",
-	"f8": "Musikzimmer"
-}
+lock = threading.Lock()
+
+with open("lacrossegw.conf") as jfile:
+	config = json.load(jfile)
 
 if raspyrfm_test(2, RFM69):
 	print("Found RaspyRFM twin")
@@ -38,12 +32,32 @@ else:
 
 try:
 	from influxdb import InfluxDBClient
-	influxClient = InfluxDBClient(host='localhost', port=8086, username='admin', password='admin')
-	influxClient.switch_database("sensors")
-	influxClient.get_list_measurements()
-except:
+	influxClient = InfluxDBClient(
+		host=config["influxdb"]["host"], 
+		port=config["influxdb"]["port"], 
+		username=config["influxdb"]["user"], 
+		password=config["influxdb"]["pass"]
+	)
+
+	createDb = True
+	for db in influxClient.get_list_database():
+		if db["name"] == config["influxdb"]["database"]:
+			createDb = False
+			break
+	if createDb:
+		influxClient.create_database(config["influxdb"]["database"])
+		influxClient.switch_database(config["influxdb"]["database"])
+		influxClient.alter_retention_policy("autogen", duration="2h", replication=1, shard_duration="1h")
+		influxClient.create_retention_policy("one_week", duration="1w", replication=1, shard_duration='24h')
+		influxClient.create_retention_policy("one_year", database=config["influxdb"]["database"], duration="365d", replication=1, shard_duration='1w')
+		influxClient.create_continuous_query("three_min", 'SELECT mean(T) as "T", mean(RH) as "RH", mean(AH) as "AH", mean(DEW) as "DEW" INTO "one_week"."lacrosse" from "lacrosse" GROUP BY time(3m),*')
+		influxClient.create_continuous_query("three_hour", 'SELECT mean(T) as "T", mean(RH) as "RH", mean(AH) as "AH", mean(DEW) as "DEW" INTO "one_week"."lacrosse" from "lacrosse" GROUP BY time(3h),*')
+	else:
+		influxClient.switch_database(config["influxdb"]["database"])
+
+except Exception as ex:
 	influxClient = None
-	print("influx init error")
+	print("influx init error: " + ex.__class__.__name__ + " " + (''.join(ex.args)))
 
 try:
 	import paho.mqtt.client as mqtt
@@ -61,7 +75,7 @@ rfm.set_params(
     Deviation = 30, #kHz frequency deviation OBW = 69.6/77.2 kHz, h = 6.3/3.5
     SyncPattern = [0x2d, 0xd4], #syncword
     Bandwidth = 100, #kHz bandwidth
-        #AfcBandwidth = 150,
+    #AfcBandwidth = 150,
 	#AfcFei = 0x0E,
     RssiThresh = -100, #-100 dB RSSI threshold
 )
@@ -74,7 +88,7 @@ class BaudChanger(threading.Thread):
 	def run(self):
 		while True:
 			time.sleep(15) 
-			print "Change"
+			print "Change baudrate"
 			if self.baud:
 				rfm.set_params(Datarate = 9.579)
 			else:
@@ -101,14 +115,125 @@ def writeInflux(payload):
 		wr["fields"]["RH"] = payload['RH']
 		wr["fields"]["DEW"] = payload["DEW"]
 		wr["fields"]["AH"] = payload["AH"]
-		wr["fields"]["RSSI"] = payload["rssi"]
-		wr["fields"]["AFC"] = payload["afc"]
 
 	influxClient.write_points([wr])
 
-time.sleep(4)
-print "Waiting for sensors..."
+def getCacheSensor(id, sensorConfig = None):
+	sensor = None
+	if (id in cache) and ((datetime.now() - cache[id]["ts"]).total_seconds() < 180):
+		sensor = cache[id]["payload"]
+		if sensorConfig is not None:
+			if ('tMax' in sensorConfig) and (sensor["T"] > sensorConfig["tMax"]):
+				sensor["tStatus"] = "high"
+
+			if ('tMin' in sensorConfig) and (sensor["T"] < sensorConfig["tMin"]):
+				sensor["tStatus"] = "low"
+
+			if ('tStatus' not in sensor) and ('tMax' in sensorConfig or 'tMin' in sensorConfig):
+				sensor["tStatus"] = "ok"
+
+			if ('RH' in sensor):
+				outSensor = getCacheSensor(sensorConfig["idOutside"]) if 'idOutside' in sensorConfig else None
+				if (outSensor is not None) and ('AH' in outSensor):
+					sensor["AHratio"] = round((outSensor["AH"] / sensor["AH"] - 1) * 100)
+					sensor["RHvent"] = round(outSensor["DD"] / sensor["SDD"] * 100)
+
+				if ('rhMax' in sensorConfig) and (sensor["RH"] > sensorConfig["rhMax"]):
+					#too wet!
+					sensor["rhStatus"] = "high"
+					if "AHratio" in sensor:
+						if sensor["AHratio"] <= -10:
+							sensor["window"] = "open"
+						elif sensor["AHratio"] >= 10:
+							sensor["window"] = "close"
+
+				if ('rhMin' in sensorConfig) and (sensor["RH"] < sensorConfig["rhMin"]):
+					#too dry
+					sensor["rhStatus"] = "low"
+					if "AHratio" in sensor:
+						if sensor["AHratio"] >= 10:
+							sensor["window"] = "open"
+						elif sensor["AHratio"] <= -10:
+							sensor["window"] = "close"
+
+				if 'rhStatus' not in sensor and ('rhMin' in sensorConfig or 'rhMax' in sensorConfig):
+					sensor["rhStatus"] = "ok"
+
+	return sensor
+
+class MyHttpRequestHandler(SimpleHTTPServer.SimpleHTTPRequestHandler):
+	def getjson(self):
+		self.send_response(200)
+		self.send_header('Content-type', 'application/json')
+		self.end_headers()
+		resp = {"sensors": []}
+		idlist = []
+		
+		lock.acquire()
+		for csens in config["sensors"]:
+			id = csens["id"]
+			sensor = getCacheSensor(id, csens)
+			if sensor is not None:
+				#print("Sensor: ", sensor)
+				idlist.append(id)
+			else:
+				sensor = {}
+				sensor["room"] = csens["name"]
+			sensor["ID"] = id
+			resp["sensors"].append(sensor)
+
+		for id in cache:
+			if id in idlist:
+				continue
+
+			sensor = getCacheSensor(id)
+			if sensor is not None:
+				resp["sensors"].append(sensor)
+
+		lock.release()
+
+		self.wfile.write(json.dumps(resp))
+	
+	def do_GET(self):
+		url = urlparse.urlparse(self.path)
+		p = url.path
+		q = urlparse.parse_qs(url.query)
+		if 'name' in q:
+			name = q['name'][0]
+
+		if p == '/data':
+			self.getjson()
+
+		elif p == '/':
+			self.path = 'index.html'
+			return SimpleHTTPServer.SimpleHTTPRequestHandler.do_GET(self)
+
+		elif p == '/history' and influxClient and name:
+			resp = influxClient.query(
+				"SELECT mean(T), mean(RH) FROM one_week.lacrosse WHERE (sensor = $name) AND time >= now() - 4h GROUP BY time(3m) fill(none)",
+				bind_params={'name': name}
+				)
+			self.send_response(200)
+			self.send_header('Content-type', 'application/json')
+			self.end_headers()
+			self.wfile.write(json.dumps(resp.raw['series'][0]['values']))
+
+		else:
+			return self.send_error(404, self.responses.get(404)[0])
+
+
+class Server(SocketServer.ThreadingMixIn, SocketServer.TCPServer):
+	pass
+
 cache = {}
+
+server = Server(('0.0.0.0', 8080), MyHttpRequestHandler)
+server_thread = threading.Thread(target=server.serve_forever)
+server_thread.daemon = True
+server_thread.start()
+
+print "Waiting for sensors..."
+
 while 1:
 	rxObj = rfm.receive(7)
 
@@ -116,7 +241,8 @@ while 1:
 		sensorObj = rawsensor.CreateSensor(rxObj)
 		sensorData = sensorObj.GetData()
 		payload = {}
-		payload["ID"] = sensorData["ID"]
+		ID = sensorData["ID"]
+		payload["ID"] = ID
 		T = sensorData["T"][0]
 		payload["T"] = T
 	except:
@@ -126,11 +252,11 @@ while 1:
 	payload["afc"] = rxObj[2]
 	payload["batlo"] = sensorData['batlo']
 	payload["init"] = sensorData["init"]
-	if (sensorData['ID'] in nodes):
-		payload["room"] = nodes[sensorData['ID']]
-	else:
-		print("Unnassigned sensor:")
-
+	lock.acquire()
+	for csens in config["sensors"]:
+		if sensorData['ID'] == csens["id"]:
+			payload["room"] = csens["name"]
+			break
 
 	if 'RH' in sensorData:
 		RH = int(sensorData['RH'][0])
@@ -143,6 +269,8 @@ while 1:
 		v = math.log10(DD/6.1078)
 		payload["DEW"] = round(b*v/(a-v), 1)
 		payload["AH"] = round(10**5 * 18.016/8314.3 * DD/(T+273.15), 1)
+		payload["SDD"] = SDD
+		payload["DD"] = DD
 
 		DD = RH / 80.0 * SDD
 		v = math.log10(DD/6.1078)
@@ -153,39 +281,36 @@ while 1:
 		payload["DEW60"] = round(b*v/(a-v), 1)
 
 
-	if not payload["ID"] in cache:
-		cache[payload["ID"]] = {}
-		cache[payload["ID"]]["count"] = 1
-	cache[payload["ID"]]["payload"] = payload;
-	cache[payload["ID"]]["ts"] = datetime.now();
-	cache[payload["ID"]]["count"] += 1
+	if not ID in cache:
+		cache[ID] = {}
+		cache[ID]["count"] = 1
+		cache[ID]["payload"] = payload
+		cache[ID]["payload"]["tMin"] = T
+		cache[ID]["payload"]["tMax"] = T
+	else:
+		payload["tMin"] = cache[ID]["payload"]["tMin"]
+		payload["tMax"] = cache[ID]["payload"]["tMax"]
+		if payload["tMin"] > T:
+			payload["tMin"] = T
+		if payload["tMax"] < T:
+			payload["tMax"] = T
+		
+		cache[ID]["payload"] = payload
 
-	os.system('clear');
-	print("|ID|    ROOM    |     TIMESTAMP     |COUNT| RSSI| AFC |BAT|INI|  T  |RH| AH | DEW | TF80| TF60|")
-	for key in cache:
-		line = "|";
-		s = cache[key]
-		p = cache[key]["payload"]
-		line += '{:2}|'.format(key)
-		line += '{:12}|'.format("" if (not "room" in p) else p["room"][:12])
-		line += s["ts"].strftime("%Y-%m-%d %H:%M:%S|")
-		line += '{:5}'.format(s["count"]) + '|'
-		line += '{:5}'.format(p["rssi"]) + '|'
-		line += '{:5}'.format(p["afc"]) + '|'
-		line += "LO!|" if p["batlo"] else "OK |"
-		line += " ! |" if p["init"] else "   |"
-		line += '{:5}|'.format(p["T"])
-		if "RH" in p:
-			line += '{:2}|'.format(p["RH"])
-			line += '{:4}|'.format(p["AH"])
-			line += '{:5}|'.format(p["DEW"])
-			line += '{:5}|'.format(p["DEW80"])
-			line += '{:5}|'.format(p["DEW60"])
-		else:
-			line += '--|----|-----|-----|-----|'
-		print(line)
+	cache[ID]["ts"] = datetime.now()
+	cache[ID]["count"] += 1
 
-	print(payload)
+	line = u" ID: {:2}  ".format(ID);
+	line += u'room {:12}  '.format(payload["room"][:12] if ("room" in payload) else "---")
+	line += u' T: {:5} \u00b0C  '.format(payload["T"])
+	if "RH" in payload:
+		line += 'RH: {:2} %  '.format(payload["RH"])
+	line += "battery: " + ("LOW  " if payload["batlo"] else "OK   ")
+	line += "init: " + ("true   " if payload["init"] else "false  ")
+
+	print('------------------------------------------------------------------------------')
+	print(line)
+	lock.release()
 
 	try:
 		if influxClient:
