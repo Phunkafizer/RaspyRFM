@@ -127,7 +127,7 @@ class IT32(RcProtocol): #switch1
 		return self._ookdata
 		
 	def encode(self, args):
-		if args.code:
+		if hasattr(args, "code") and args.code:
 			if re.match("^[01]{32}$", args.code):
 				return self.__encode(args.code)
 				
@@ -193,13 +193,13 @@ class ITTristate(RcProtocol): #old intertechno systems
 		return code
 		
 	def encode(self, args):
-		if args.code:
+		if hasattr(args, 'code') and args.code:
 			if re.match("^[01Ff]{12}$", args.code):
 				return self.__encode(args.code)
 
 		code = ""
 		code += self.__encode_int(ord(args.house[0]) - ord('A'), 4)
-		if args.group:
+		if hasattr(args, 'group') and args.group:
 			code += self.__encode_int(args.group - 1, 2)
 			code += self.__encode_int(args.unit - 1, 2)
 		else:
@@ -403,6 +403,7 @@ class PDM32(RcProtocol):
 			'0': [2, 1],
 		}
 		RcProtocol.__init__(self)
+		self._parser.add_argument("-c", "--code")
 
 	def decode(self, pulsetrain):
 		code, tb = self._decode_symbols(pulsetrain[0:-2])
@@ -412,6 +413,14 @@ class PDM32(RcProtocol):
 				"code": code,
 				"timebase": tb,
 			}
+
+	def encode(self, args):
+		self._reset()
+		self._add_symbols(args.code)
+		self._add_pulses([1, 11])
+		self._add_finish()
+		return self._ookdata
+
 
 protocols = [
 	IT32(),
@@ -426,8 +435,19 @@ protocols = [
 def encode(protocol, args):
 	for p in protocols:
 		if (protocol):
+			print("found ptoto")
 			if p._name == protocol:
 				return (p.encode(p._parser.parse_args(args)), p._timebase, p._repetitions)
+
+class RCStruct:
+    def __init__(self, **entries):
+        self.__dict__.update(entries)
+
+def encode_dict(dict):
+	s = RCStruct(**dict)
+	for p in protocols:
+		if p._name == s.protocol:
+			return (p.encode(s), p._timebase, p._repetitions)
 
 def decode(pulsetrain):
 	dec = None
