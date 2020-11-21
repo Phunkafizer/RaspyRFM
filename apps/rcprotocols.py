@@ -51,7 +51,6 @@ class RcProtocol:
 			self._add_pulses([8 - self.__numbits])
 
 	def _add_symbols(self, symbols):
-		print(symbols)
 		for s in symbols:
 			sym = self._symbols[s]
 			for pulse in sym:
@@ -213,7 +212,7 @@ class Switch15(RcProtocol): #e. g. logilight
 	def __init__(self):
 		self._name = "switch15"
 		self._timebase = 300
-		self._repetitions = 4
+		self._repetitions = 6
 		self._pattern = "[01]{24}"
 		self._symbols = { 
 			'1': [3, 1],
@@ -252,6 +251,7 @@ class Switch15(RcProtocol): #e. g. logilight
 			}
 
 	def encode(self, args):
+		self._reset()
 		sym = '{:020b}'.format(args.id)
 
 		if args.unit == 1:
@@ -271,7 +271,7 @@ class Switch15(RcProtocol): #e. g. logilight
 		self._add_finish()
 		return self._ookdata
 		
-class Emylo(Switch15): #e. g. logilight
+class Emylo(Switch15):
 	def __init__(self):
 		Switch15.__init__(self)
 		self._name = "emylo"
@@ -435,7 +435,6 @@ protocols = [
 def encode(protocol, args):
 	for p in protocols:
 		if (protocol):
-			print("found ptoto")
 			if p._name == protocol:
 				return (p.encode(p._parser.parse_args(args)), p._timebase, p._repetitions)
 

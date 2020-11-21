@@ -3,7 +3,6 @@
 from raspyrfm import *
 import sys
 import time
-#import it32
 #import tristate
 #import bistate24
 #import fs20

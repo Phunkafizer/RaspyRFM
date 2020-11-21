@@ -5,8 +5,15 @@ import threading
 from raspyrfm import *
 import rcprotocols
 import json
+from argparse import ArgumentParser
+
+parser = ArgumentParser()
+parser.add_argument("-m", "--module", type=int, metavar="1-4", help=u"RaspyRFM module 1-4", default=1)
+parser.add_argument("-o", "--mode", help=u"Mode (rcpulse, lacrosse)", default="rcpulse")
+args = parser.parse_known_args()
 
 srvsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+srvsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 srvsock.bind(('', 1989))
 srvsock.listen(5)
 
@@ -41,7 +48,6 @@ class clientthread(threading.Thread):
             try:
                 lock.acquire()
                 txdata = rcprotocols.encode_dict(json.loads(chunk))
-                print(txdata)
                 rfm.set_params(
                     SyncPattern = [],
                     Datarate = 1000.0 / txdata[1]
