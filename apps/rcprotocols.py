@@ -155,11 +155,12 @@ class ITTristate(RcProtocol): #old intertechno systems
 		self._name = "ittristate"
 		self._timebase = 300
 		self._repetitions = 4
-		self._pattern = "[01f]{12}"
+		self._pattern = "[01fF]{12}"
 		self._symbols = { 
 			'0': [1, 4, 1, 4],
 			'1': [4, 1, 4, 1],
 			'f': [1, 4, 4, 1],
+			'F': [1, 4, 4, 1],
 		}
 		RcProtocol.__init__(self)
 		self._parser.add_argument("-c", "--code")
@@ -207,10 +208,9 @@ class ITTristate(RcProtocol): #old intertechno systems
 		code += "ff" if args.state > 0 else "f0"
 		return self.__encode(code)
 		
-
-class Switch15(RcProtocol): #e. g. logilight
+class Bistate24(RcProtocol):
 	def __init__(self):
-		self._name = "switch15"
+		self._name = "bistate24"
 		self._timebase = 300
 		self._repetitions = 6
 		self._pattern = "[01]{24}"
@@ -219,6 +219,31 @@ class Switch15(RcProtocol): #e. g. logilight
 			'0': [1, 3],
 		}
 		RcProtocol.__init__(self)
+		self._parser.add_argument("-c", "--code", required=True)
+
+	def decode(self, pulsetrain):
+		code, tb = self._decode_symbols(pulsetrain[0:-2])
+		if code:
+			return {
+				"protocol": self._name,
+				"code": code,
+				"timebase": tb,
+			}
+
+	def encode(self, args):
+		self._reset()
+		self._add_symbols(args.code)
+		self._add_pulses([1, 31])
+		self._add_finish()
+		return self._ookdata
+
+class Switch15(Bistate24): #e. g. logilight
+	def __init__(self):
+		Bistate24.__init__(self)
+		self._name = "switch15"
+		#remove code argument
+		carg = self._parser._actions[-1]
+		carg.container._remove_action(carg)
 		self._parser.add_argument("-i", "--id", type=int, required=True)
 		self._parser.add_argument("-u", "--unit", type=int, required=True)
 		self._parser.add_argument("-s", "--state", type=int, required=True)
@@ -271,10 +296,15 @@ class Switch15(RcProtocol): #e. g. logilight
 		self._add_finish()
 		return self._ookdata
 		
-class Emylo(Switch15):
+class Emylo(Bistate24):
 	def __init__(self):
-		Switch15.__init__(self)
+		Bistate24.__init__(self)
 		self._name = "emylo"
+		#remove code argument
+		carg = self._parser._actions[-1]
+		carg.container._remove_action(carg)
+		self._parser.add_argument("-i", "--id", type=int, required=True)
+		self._parser.add_argument("-k", "--key", required=True)
 
 	def decode(self, pulsetrain):
 		code, tb = self._decode_symbols(pulsetrain[0:-2])
@@ -293,11 +323,29 @@ class Emylo(Switch15):
 
 			return {
 				"protocol": self._name,
-				"code": code,
 				"timebase": tb,
 				"id": int(code[0:20], 2),
 				"key": key,
 			}
+
+	def encode(self, args):
+		self._reset()
+		sym = '{:020b}'.format(args.id)
+		if args.key == "A":
+			sym += "0001"
+		elif args.key == "B":
+			sym += "0010"
+		elif args.key == "C":
+			sym += "0100"
+		elif args.key == "D":
+			sym += "1000"
+		else:
+			return
+
+		self._add_symbols(sym)
+		self._add_pulses([1, 31])
+		self._add_finish()
+		return self._ookdata
 
 class FS20(RcProtocol):
 	def __init__(self):
@@ -396,7 +444,7 @@ class PDM32(RcProtocol):
 	def __init__(self):
 		self._name = "pdm32"
 		self._timebase = 600
-		self._repetitions = 4
+		self._repetitions = 6
 		self._pattern = "[01]{32}"
 		self._symbols = { 
 			'1': [1, 2],
@@ -421,7 +469,6 @@ class PDM32(RcProtocol):
 		self._add_finish()
 		return self._ookdata
 
-
 protocols = [
 	IT32(),
 	Switch15(),
@@ -430,6 +477,7 @@ protocols = [
 	FS20(),
 	Emylo(),
 	PDM32(),
+	Bistate24(),
 ]
 
 def encode(protocol, args):

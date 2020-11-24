@@ -3,8 +3,6 @@
 from raspyrfm import *
 import sys
 import time
-#import tristate
-#import bistate24
 #import fs20
 from argparse import ArgumentParser
 import wave, struct
@@ -68,13 +66,13 @@ class RxThread(threading.Thread):
 		bit = False
 		cnt = 1
 		train = []
-		if args.write:
-			wf = wave.open(args.write, "wb")
-			wf.setnchannels(1)
-			wf.setsampwidth(1)
-			wf.setframerate(20000)
-		else:
-			wf = None
+		#if args.write:
+		#	wf = wave.open(args.write, "wb")
+		#	wf.setnchannels(1)
+		#	wf.setsampwidth(1)
+		#	wf.setframerate(20000)
+		#else:
+		wf = None
 
 		while self.__event.isSet():
 			fifo = rfm.read_fifo_wait(64)
@@ -110,11 +108,12 @@ class RxThread(threading.Thread):
 				wf.writeframes('')
 
 	def run(self):
-		self.__event.wait()
-		rfm.set_params(
-			Datarate = 20.0 #kbit/s
-		)
-		rfm.start_receive(self.__rxcb)
+		while True:
+			self.__event.wait()
+			rfm.set_params(
+				Datarate = 20.0 #kbit/s
+			)
+			rfm.start_receive(self.__rxcb)
 
 	def suspend(self):
 		self.__event.clear()
@@ -125,10 +124,7 @@ class RxThread(threading.Thread):
 rxthread = RxThread()
 rxthread.daemon = True
 rxthread.start()
-lasttime = 0
-
-class Args:
-	pass
+lasttime = time.time() + 3
 
 while True:
 	time.sleep(0.1)
@@ -140,18 +136,19 @@ while True:
 		dec = rcprotocols.decode(train)
 		if (dec):
 			print(dec)
-		#else:
-		print(train)
+		else:
+			print(train)
 
 	if time.time() > lasttime:
-		lasttime = time.time() + 5
-		print("sdfkl")
-		args = Args()
-		#rxthread.suspend()
-		args.code = "01010011110011111110000111111111"
-		#rfm.set_params(
-		#	Datarate = 1000.0 / 600
-		#)
-		#txdata = rcprotocols.encode("PDM32", args)
-		#print(txdata)
-		#rxthread.resume()
+		lasttime = time.time() + 3
+		rxthread.suspend()
+		try:
+			txdata = rcprotocols.encode_dict({"protocol": "emylo", "id": 970046, "key": "A"})
+			rfm.set_params(
+				Datarate = 1000.0 / txdata[1]
+			)
+			rep = txdata[2]
+			rfm.send(txdata[0] * rep)
+		except:
+			pass
+		rxthread.resume()

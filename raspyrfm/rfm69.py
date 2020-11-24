@@ -338,6 +338,7 @@ class Rfm69(threading.Thread):
 			elif key == "Datarate":
 				rate = int(round(FXOSC / (value * 1000)))
 				self.__write_reg_word(RegBitrateMsb, rate)
+				print("written datarate")
 
 			elif key == "Deviation":
 				dev = int(round(value * 1000 / FSTEP))
@@ -431,7 +432,7 @@ class Rfm69(threading.Thread):
 			else:
 				print("Unrecognized option >>" + key + "<<")
 
-		self.mode_standby();
+		self.mode_standby()
 		self.__mutex.release()
 
 	def __wait_int(self):

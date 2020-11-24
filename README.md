@@ -44,14 +44,14 @@ sudo ./fs20tx <housecode> <address> <command>
 ## intertechno.py
 controlling remote control sockets
 ```sh
-rcpulse <HOUSECODE A-P> <GROUP 1-4> <CHANNEL 1-4> on|off #control old intertechno sockets
-rcpulse <12 symbols tristate code> #control old intertechno sockets
+./rcpulse.py -p ittristate -o <HOUSECODE A-P> -g <GROUP 1-4> -u <CHANNEL 1-4> -s <0|1> #control old intertechno sockets
+./rcpulse.py -p ittristate -c <12 symbols tristate code> #control old intertechno sockets
 rcpulse <26 bit address 0|1> <1 goup bit 0|1> <4 bit unit 0|1> on|off #control intertechno self learning
 rcpulse <32 bit code 0|1> #control intertechno and compatible (HAMA, REV)
 rcpulse <5 DIP 0|1> <channel 1-4> on|off #control Brennenstuhl RC1000 
 usage example:
-./rcpulse A 1 1 on
-./rcpulse 0000FFFF0FFF
+./rcpulse.py -p ittristate -o A -g 1 -u 1 -s 1
+./rcpulse.py -p ittristate -c 0000FFFF0FFF
 ./rcpulse 11110000111100001111000010 0 1110 on
 ./rcpulse 11110000111100001111000010010000
 ```
