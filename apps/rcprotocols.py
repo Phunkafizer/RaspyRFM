@@ -469,6 +469,35 @@ class PDM32(RcProtocol):
 		self._add_finish()
 		return self._ookdata
 
+class PCPIR(RcProtocol): #pilota casa PIR sensor
+	def __init__(self):
+		self._name = "pcpir"
+		self._timebase = 400
+		self._repetitions = 5
+		self._pattern = "[01]{12}"
+		self._symbols = { 
+			'1': [1, 3, 1, 3],
+			'0': [1, 3, 3, 1],
+		}
+		RcProtocol.__init__(self)
+		self._parser.add_argument("-c", "--code", required=True)
+
+	def decode(self, pulsetrain):
+		code, tb = self._decode_symbols(pulsetrain[0:-2])
+		if code:
+			return {
+				"protocol": self._name,
+				"code": code,
+				"timebase": tb,
+			}
+
+	def encode(self, args):
+		self._reset()
+		self._add_symbols(args.code)
+		self._add_pulses([1, 12])
+		self._add_finish()
+		return self._ookdata
+
 protocols = [
 	IT32(),
 	Switch15(),
@@ -478,6 +507,7 @@ protocols = [
 	Emylo(),
 	PDM32(),
 	Bistate24(),
+	PCPIR(),
 ]
 
 def encode(protocol, args):
@@ -507,7 +537,7 @@ def decode(pulsetrain):
 	if len(res) > 0:
 		return res
 		
-class PulseReceiver(threading.Thread):
+class PulseTRX(threading.Thread):
 	def __init__(self, module):
 		self.__trainbuf = []
 		self.__rfm = RaspyRFM(module, RFM69)
@@ -523,6 +553,8 @@ class PulseReceiver(threading.Thread):
 			Preamble = 0,
 			TxPower = 13
 		)
+		self.__event = threading.Event()
+		self.__event.set()
 		threading.Thread.__init__(self)
 		self.daemon = True
 		self.start()
@@ -531,11 +563,17 @@ class PulseReceiver(threading.Thread):
 		if len(self.__trainbuf) > 0:
 			train = self.__trainbuf.pop()
 			for i, v in enumerate(train):
-				train[i] = 50 * v;
+				train[i] = 50 * v
 			return decode(train)
 		
 	def run(self):
-		self.__rfm.start_receive(self.__cb)
+		while True:
+			self.__event.wait()
+			rfm.set_params(
+				Datarate = 20.0 #kbit/s
+			)
+			rfm.start_receive(self.__rxcb)
+
 	
 	def __cb(self, rfm):
 		bit = False
