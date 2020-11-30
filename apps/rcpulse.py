@@ -3,7 +3,6 @@
 from raspyrfm import *
 import sys
 import time
-#import fs20
 from argparse import ArgumentParser
 import wave, struct
 import threading
@@ -18,137 +17,29 @@ parser.add_argument("-p", "--protocol", help=u"Protocol for sending")
 parser.add_argument("-w", "--write", help=u"write wavefile")
 args, remainargs = parser.parse_known_args()
 
-txdata = None
-if len(remainargs) > 0:
-	txdata = rcprotocols.encode(args.protocol, remainargs)
-
-	if txdata is None:
-		print("invalid code!")
-		exit()
+def rxcb(dec, train):
+	for p in dec:
+		print(p)
+	if len(dec) == 0:
+		print(train)
 
 if not raspyrfm_test(args.module, RFM69):
 	print("Error! RaspyRFM not found")
 	exit()
 
-rfm = RaspyRFM(args.module, RFM69)
-rfm.set_params(
-	Freq = args.frequency, #MHz
-	Datarate = 20.0, #kbit/s
-	Bandwidth = 300, #kHz
-	SyncPattern = [],
-	RssiThresh = -105, #dBm
-	ModulationType = rfm69.OOK,
-	OokThreshType = 1, #peak thresh
-	OokPeakThreshDec = 3,
-	Preamble = 0,
-	TxPower = 13
-)
+rctrx = rcprotocols.RcTransceiver(args.module, args.frequency, rxcb)
 
-if txdata:
-	rfm.set_params(
-		SyncPattern = [],
-		Datarate = 1000.0 / (args.timebase if args.timebase else txdata[1])
-	)
-	rep = (args.repeats if args.repeats else txdata[2])
-	rfm.send(txdata[0] * rep)
-	print("Code sent!")
+if len(remainargs) > 0:
+	rctrx.send_args(args.protocol, remainargs, args.timebase, args.repeats)
+	del rctrx
 	exit()
 
-trainbuf = []
-
-class RxThread(threading.Thread):
-	def __init__(self):
-		self.__event = threading.Event()
-		self.__event.set()
-		threading.Thread.__init__(self)
-
-	def __rxcb(self, rfm):
-		bit = False
-		cnt = 1
-		train = []
-		#if args.write:
-		#	wf = wave.open(args.write, "wb")
-		#	wf.setnchannels(1)
-		#	wf.setsampwidth(1)
-		#	wf.setframerate(20000)
-		#else:
-		wf = None
-
-		while self.__event.isSet():
-			fifo = rfm.read_fifo_wait(64)
-			ba = bytearray()
-
-			for b in fifo:
-				mask = 0x80
-				while mask != 0:
-					if (b & mask) != 0:
-						ba.append(245)
-					else:
-						ba.append(10)
-
-					if ((b & mask) != 0) == bit:
-						cnt += 1
-					else:
-						if cnt < 3: #<150 us
-							train *= 0 #clear
-						elif cnt > 50:
-							if not bit:
-								train.append(cnt)
-								if len(train) > 20:
-									trainbuf.append(list(train))
-							train *= 0 #clear
-						elif len(train) > 0 or bit:
-							train.append(cnt)
-						cnt = 1
-						bit = not bit
-					mask >>= 1
-
-			if wf:
-				wf.writeframesraw(ba)
-				wf.writeframes('')
-
-	def run(self):
-		while True:
-			self.__event.wait()
-			rfm.set_params(
-				Datarate = 20.0 #kbit/s
-			)
-			rfm.start_receive(self.__rxcb)
-
-	def suspend(self):
-		self.__event.clear()
-
-	def resume(self):
-		self.__event.set()
-
-rxthread = RxThread()
-rxthread.daemon = True
-rxthread.start()
-lasttime = time.time() + 3
-
+state = 1
 while True:
-	time.sleep(0.1)
-	if len(trainbuf) > 0:
-		train = trainbuf.pop()
-		for i, v in enumerate(train):
-			train[i] = v * 50
-
-		dec = rcprotocols.decode(train)
-		if (dec):
-			print(dec)
-		else:
-			print(train)
-
-	if time.time() > lasttime:
-		lasttime = time.time() + 3
-		rxthread.suspend()
-		try:
-			txdata = rcprotocols.encode_dict({"protocol": "emylo", "id": 970046, "key": "A"})
-			rfm.set_params(
-				Datarate = 1000.0 / txdata[1]
-			)
-			rep = txdata[2]
-			rfm.send(txdata[0] * rep)
-		except:
-			pass
-		rxthread.resume()
+	time.sleep(10)
+	
+	rctrx.send_dict({"protocol": "ittristate", "house": "A", "unit": 1, "state": state})
+	if (state == 1):
+		state = 0
+	else:
+		state = 1
