@@ -14,7 +14,6 @@ parser.add_argument("-r", "--repeats", type=int, help=u"number of repetitions")
 parser.add_argument("-m", "--module", type=int, metavar="1-4", help=u"RaspyRFM module 1-4", default=1)
 parser.add_argument("-f", "--frequency", type=float, help=u"frequency in MHz", default=433.92)
 parser.add_argument("-p", "--protocol", help=u"Protocol for sending")
-parser.add_argument("-w", "--write", help=u"write wavefile")
 args, remainargs = parser.parse_known_args()
 
 def rxcb(dec, train):
@@ -29,17 +28,25 @@ if not raspyrfm_test(args.module, RFM69):
 
 rctrx = rcprotocols.RcTransceiver(args.module, args.frequency, rxcb)
 
-if len(remainargs) > 0:
-	rctrx.send_args(args.protocol, remainargs, args.timebase, args.repeats)
+if args.protocol:
+	proto = rcprotocols.get_protocol(args.protocol)
+	if proto:
+		parser2 = ArgumentParser()
+		for param in proto.params:
+			parser2.add_argument("-" + param[0], "--" + param[1], required=True)
+		params = parser2.parse_args(remainargs)
+		rctrx.send(args.protocol, params.__dict__, args.timebase, args.repeats)	
+	else:
+		print("Unknown protocol.")
 	del rctrx
 	exit()
 
-state = 1
+state = "on"
 while True:
-	time.sleep(10)
+	time.sleep(15)
 	
-	rctrx.send_dict({"protocol": "ittristate", "house": "A", "unit": 1, "state": state})
-	if (state == 1):
-		state = 0
+	rctrx.send("ittristate", {"house": "A", "group": 1, "unit": 1, "command": state})
+	if (state == "on"):
+		state = "off"
 	else:
-		state = 1
+		state = "on"

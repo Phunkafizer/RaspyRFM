@@ -10,7 +10,7 @@ from argparse import ArgumentParser
 parser = ArgumentParser()
 parser.add_argument("-m", "--module", type=int, metavar="1-4", help=u"RaspyRFM module 1-4", default=1)
 parser.add_argument("-f", "--frequency", type=float, help=u"frequency in MHz", default=433.92)
-args, remargs = parser.parse_known_args()
+args = parser.parse_args()
 
 srvsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 srvsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -39,11 +39,10 @@ class clientthread(threading.Thread):
             if len(chunk) == 0:
                 del self.__socket
                 break
-            print(chunk)
             try:
                 lock.acquire()
-                rctrx.send_dict(json.loads(chunk))
-                txdata = rcprotocols.encode_dict(json.loads(chunk))
+                d = json.loads(chunk)
+                rctrx.send(d["protocol"], d["params"])
             except:
                 pass
             lock.release()
