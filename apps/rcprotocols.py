@@ -357,8 +357,6 @@ class Emylo(PWM1):
 				if self.__keys[k] == symbols[-4:]:
 					key = k
 					break
-			print(k)
-			print(symbols[-4:])
 			if key is None:
 				return
 
@@ -411,64 +409,79 @@ class FS20(RcProtocol):
 		return self._build_frame(symbols, timebase, repetitions)
 		
 	def decode(self, pulsetrain):
-		code, tb, rep = self._decode_symbols(pulsetrain[0:-2])
-		print(code)
-		if code:
+		symbols, tb, rep = self._decode_symbols(pulsetrain[0:-2])
+		if symbols:
 			params = {
-				"house": int(code[13:21] + code[22:30] , 2),
-				"unit": int(code[31:39], 2) + 1,
-				"command": int(code[40:48], 2),
+				"id": int(symbols[13:21] + symbols[22:30], 2),
+				"unit": int(symbols[31:39], 2) + 1,
+				"command": int(symbols[40:48], 2),
 			}
 			return self._name, params, tb, rep
 
 class Voltcraft(RcProtocol):
+	'''
+	PPM: Pulse Position Modulation
+	Pulse in middle of a symbol: 0, end of symbol: 1
+	Used by Voltcraft RC30
+	'''
+	__commands = {0: "off", 1: "alloff", 2: "on", 3: "allon", 5: "dimup", 7: "dimdown"}
 	def __init__(self):
 		self._name = "voltcraft"
 		self._timebase = 600
 		self._repetitions = 4
 		self._pattern = "[01]{20}"
-		self._symbols = { 
+		self._symbols = {
 			'0': [1, 2],
 			'1': [2, 1],
 		}
+		self._header = [1]
+		self._footer = [132]
+		self.params = [
+			('i', 'id'),
+			('u', 'unit'),
+			('a', 'command')
+		]
 		RcProtocol.__init__(self)
-		self._parser.add_argument("-i", "--id", type=int, required=True)
-		self._parser.add_argument("-u", "--unit", type=int, required=True)
-		self._parser.add_argument("-s", "--state", type=int, required=True)
 
-	def decode(self, pulsetrain):
-		code, tb, rep = self._decode_symbols(pulsetrain[1:-1])
-		if code:
-			return {
-				"protocol": self._name,
-				"code": code,
-				"timebase": tb,
-				"id": int(code[0:12][::-1], 2),
-				"unit": int(code[12:14][::-1], 2) + 1,
-				"state": int(code[14:17][::-1], 2) #0=off, 1=alloff, 2=on, 3=allon, 5=bright, 7=dim 
-			}, rep
-		
-	def encode(self, args):
-		if not (args.state in [0, 2]):
+	def encode(self, params, timebase=None, repetitions=None):
+		cmd = None
+		for k in self.__commands:
+			if self.__commands[k] == params["command"]:
+				cmd = k
+				break
+			
+		if not (cmd in [0, 2]):
 			unit = 3
 		else:
-			unit = args.unit -1
-		symbols = "{:012b}".format(args.id)[::-1]
+			unit = int(params["unit"])-1
+
+		symbols = "{:012b}".format(int(params["id"]))[::-1]
 		symbols += "{:02b}".format(unit)[::-1]
-		symbols += "{:03b}".format(args.state)[::-1]
+		symbols += "{:03b}".format(cmd)[::-1]
 		symbols += "0"
 		symbols += "1" if (symbols[12] == "1") ^ (symbols[14] == "1") ^ (symbols[16] == "1") else "0"
 		symbols += "1" if (symbols[13] == "1") ^ (symbols[15] == "1") ^ (symbols[17] == "1") else "0"
-		self._reset()
-		self._add_pulses([1])
-		self._add_symbols(symbols)
-		self._add_pulses([132])
-		self._add_finish()
-		return self._ookdata, self._timebase, self._repetitions
-		
-class PDM32(RcProtocol): 
+		return self._build_frame(symbols, timebase, repetitions)
+
+	def decode(self, pulsetrain):
+		symbols, tb, rep = self._decode_symbols(pulsetrain[1:-1])
+		if symbols:
+			params = {
+				"id": int(symbols[0:12][::-1], 2),
+				"unit": int(symbols[12:14][::-1], 2) + 1,
+				"command": self.__commands[int(symbols[14:17][::-1], 2)]
+			}
+			return self._name, params, tb, rep
+
+class PWM2(RcProtocol): 
+	'''
+	PWM2: Pulse Width Modulation
+	Wide pulse -> 0, small pulse -> 1
+	Frame: header, payload, footer
+	Used by Pilota casa
+	'''
 	def __init__(self):
-		self._name = "pdm32"
+		self._name = "pwm2"
 		self._timebase = 600
 		self._repetitions = 6
 		self._pattern = "[01]{32}"
@@ -476,24 +489,31 @@ class PDM32(RcProtocol):
 			'1': [1, 2],
 			'0': [2, 1],
 		}
+		self._footer = [1, 11]
+		self.params = [
+			('c', 'code')
+		]
 		RcProtocol.__init__(self)
-		self._parser.add_argument("-c", "--code")
 
 	def decode(self, pulsetrain):
-		code, tb, rep = self._decode_symbols(pulsetrain[0:-2])
-		if code:
+		symbols, tb, rep = self._decode_symbols(pulsetrain[:-2])
+		
+		if symbols:
+			x1 = symbols[2:8]
+			x2 = x1[5] + x1[4] + x1[3] + x1[2] + x1[1] + x1[0] 
+			print(symbols, symbols[2:4], symbols[4:8], int(x1, 2), int(x2, 2))
+		return
+		
+		if symbols:
 			return {
 				"protocol": self._name,
 				"code": code,
 				"timebase": tb,
 			}, rep
 
-	def encode(self, args):
-		self._reset()
-		self._add_symbols(args.code)
-		self._add_pulses([1, 11])
-		self._add_finish()
-		return self._ookdata, self._timebase, self._repetitions
+	def encode(self, params, timebase=None, repetitions=None):
+		symbols = params["code"]
+		return self._build_frame(symbols, timebase, repetitions)
 
 class PCPIR(RcProtocol): #pilota casa PIR sensor
 	def __init__(self):
@@ -531,8 +551,8 @@ protocols = [
 	Hama(),
 	Logilight(),
 	Emylo(),
-	
-	#Voltcraft(),
+	PWM2(),
+	Voltcraft(),
 	#PDM32(),
 	#PCPIR(),
 	#PDM1(),
@@ -552,7 +572,7 @@ class RfmPulseTRX(threading.Thread):
 		self.__rfm = RaspyRFM(module, RFM69)
 		self.__rfm.set_params(
 			Freq = frequency, #MHz
-			Bandwidth = 200, #kHz
+			Bandwidth = 500, #kHz
 			SyncPattern = [],
 			RssiThresh = -105, #dBm
 			ModulationType = rfm69.OOK,

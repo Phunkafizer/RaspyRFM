@@ -45,7 +45,7 @@ state = "on"
 while True:
 	time.sleep(15)
 	
-	rctrx.send("ittristate", {"house": "A", "group": 1, "unit": 1, "command": state})
+	#rctrx.send("ittristate", {"house": "A", "group": 1, "unit": 1, "command": state})
 	if (state == "on"):
 		state = "off"
 	else:
