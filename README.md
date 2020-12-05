@@ -35,30 +35,12 @@ see https://power-switch.eu/
 ## emoncms.py
 receive lacrosse-sensors with the RaspyRFM and post them to the open energy monitor, see https://openenergymonitor.org/
 
-## fs20tx.py
-controlling FS20 RX sockets
-```sh
-sudo ./fs20tx <housecode> <address> <command>
-```
-
-## intertechno.py
-controlling remote control sockets
-```sh
-rcpulse <HOUSECODE A-P> <GROUP 1-4> <CHANNEL 1-4> on|off #control old intertechno sockets
-rcpulse <12 symbols tristate code> #control old intertechno sockets
-rcpulse <26 bit address 0|1> <1 goup bit 0|1> <4 bit unit 0|1> on|off #control intertechno self learning
-rcpulse <32 bit code 0|1> #control intertechno and compatible (HAMA, REV)
-rcpulse <5 DIP 0|1> <channel 1-4> on|off #control Brennenstuhl RC1000 
-usage example:
-./rcpulse A 1 1 on
-./rcpulse 0000FFFF0FFF
-./rcpulse 11110000111100001111000010 0 1110 on
-./rcpulse 11110000111100001111000010010000
-```
-
-## Receive 433 MHz RC remote controls
+## Receive and send 433 MHz RC remote controls
 ```sh
 ./rcpulse.py
+./rcpulse.py -p intertechno -i 47612 -u 1 -a on
+./rcpulse.py -p logilight -i 76123 -u 1 -a on
+./rcpulse.py -p pilota -i 1234 -g 1 -u 1 -a on 
 ```
 
 ## Receive 868 MHz ELV FS20 RC remote controls

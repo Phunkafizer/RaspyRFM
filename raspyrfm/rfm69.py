@@ -431,7 +431,7 @@ class Rfm69(threading.Thread):
 			else:
 				print("Unrecognized option >>" + key + "<<")
 
-		self.mode_standby();
+		self.mode_standby()
 		self.__mutex.release()
 
 	def __wait_int(self):
@@ -529,9 +529,9 @@ class Rfm69(threading.Thread):
 				b = self.read_fifo_wait()
 				if b != 0:
 					thresh += 1
-					break;
+					break
 			if i == 149:
-				break;
+				break
 
 		#restore registers
 		self.__write_reg(RegRssiThresh, rssithresh)
@@ -555,7 +555,7 @@ class Rfm69(threading.Thread):
 			self.__wait_int()
 			self.__mutex.acquire()
 			if self.__mode == MODE_RX:
-				break;
+				break
 
 	def start_receive(self, cb):
 		self.__start_rx(0)
