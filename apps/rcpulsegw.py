@@ -40,6 +40,7 @@ class clientthread(threading.Thread):
                 del self.__socket
                 break
             try:
+                print(chunk)
                 lock.acquire()
                 d = json.loads(chunk)
                 rctrx.send(d["protocol"], d["params"])

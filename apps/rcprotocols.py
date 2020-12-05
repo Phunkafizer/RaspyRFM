@@ -4,6 +4,8 @@ from raspyrfm import *
 import threading
 import time
 
+PARAM_ID = ('i', 'id')
+
 class RcProtocol:
 	def __init__(self):
 		self.__numbits = 0
@@ -225,7 +227,7 @@ class Intertechno(PPM1):
 		self._name = "intertechno"
 		self._timebase = 275
 		self.params = [
-			('i', 'id'),
+			PARAM_ID,
 			('u', 'unit'),
 			('a', 'command'),
 		]
@@ -272,7 +274,7 @@ class PWM1(RcProtocol):
 	PWM1: Pulse Width Modulation
 	Wide pulse -> 1, small pulse -> 0
 	Frame: header, payload, footer
-	Used by Intertechno self learning, Hama, ...
+	Used by Emylo, Logilight, ...
 	'''
 	def __init__(self):
 		self._timebase = 300
@@ -290,7 +292,7 @@ class Logilight(PWM1):
 		PWM1.__init__(self)
 		self._name = "logilight"
 		self.params = [
-			('i', 'id'),
+			PARAM_ID,
 			('u', 'unit'),
 			('a', 'command'),
 		]
@@ -336,7 +338,7 @@ class Emylo(PWM1):
 		PWM1.__init__(self)
 		self._name = "emylo"
 		self.params = [
-			('i', 'id'),
+			PARAM_ID,
 			('k', 'key'),
 		]
 		self.__keys = {'A': '0001', 'B': '0010', 'C': '0100', 'D': '1000'}
@@ -379,7 +381,7 @@ class FS20(RcProtocol):
 		self._header = [2, 2] * 12 + [3, 3]
 		self._footer = [1, 100]
 		self.params = [
-			('i', 'id'),
+			PARAM_ID,
 			('u', 'unit'),
 			('a', 'command')
 		]
@@ -437,7 +439,7 @@ class Voltcraft(RcProtocol):
 		self._header = [1]
 		self._footer = [132]
 		self.params = [
-			('i', 'id'),
+			PARAM_ID,
 			('u', 'unit'),
 			('a', 'command')
 		]
@@ -483,7 +485,7 @@ class PWM2(RcProtocol):
 	def __init__(self):
 		self._name = "pwm2"
 		self._timebase = 600
-		self._repetitions = 6
+		self._repetitions = 10
 		self._pattern = "[01]{32}"
 		self._symbols = { 
 			'1': [1, 2],
@@ -494,6 +496,10 @@ class PWM2(RcProtocol):
 			('c', 'code')
 		]
 		RcProtocol.__init__(self)
+
+	def encode(self, params, timebase=None, repetitions=None):
+		symbols = params["code"]
+		return self._build_frame(symbols, timebase, repetitions)
 
 	def decode(self, pulsetrain):
 		symbols, tb, rep = self._decode_symbols(pulsetrain[:-2])
@@ -511,9 +517,57 @@ class PWM2(RcProtocol):
 				"timebase": tb,
 			}, rep
 
+class PilotaCasa(PWM2):
+	__codes = {
+		'110001': (1, 1, 'on'), '111110': (1, 1, 'off'),
+		'011001': (1, 2, 'on'), '010001': (1, 2, 'off'),
+		'101001': (1, 3, 'on'), '100001': (1, 3, 'off'),
+		'111010': (2, 1, 'on'), '110010': (2, 1, 'off'),
+		'010110': (2, 2, 'on'), '011010': (2, 2, 'off'),
+		'100110': (2, 3, 'on'), '101010': (2, 3, 'off'),
+		'110111': (3, 1, 'on'), '111011': (3, 1, 'off'),
+		'011111': (3, 2, 'on'), '010111': (3, 2, 'off'),
+		'101111': (3, 3, 'on'), '100111': (3, 3, 'off'),
+		'111101': (4, 1, 'on'), '110101': (4, 1, 'off'),
+		'010011': (4, 2, 'on'), '011101': (4, 2, 'off'),
+		'100011': (4, 3, 'on'), '101101': (4, 3, 'off'),
+	}
+
+	def __init__(self):
+		PWM2.__init__(self)
+		self._name = "pilota"
+		self.params = [
+			PARAM_ID,
+			('g', 'group'),
+			('u', 'unit'),
+			('a', 'command')
+		]
+
 	def encode(self, params, timebase=None, repetitions=None):
-		symbols = params["code"]
+		symbols = '01'
+		u = None
+		for k, v in self.__codes.items():
+			if v[0] == int(params["group"]) and v[1] == int(params["unit"]) and v[2] == params["command"]:
+				u = k
+				break
+		symbols += u
+		symbols += "{:016b}".format(int(params["id"]))[::-1]
+		symbols += "11111111"
+		print(symbols)
 		return self._build_frame(symbols, timebase, repetitions)
+		
+	def decode(self, pulsetrain):
+		symbols, tb, rep = self._decode_symbols(pulsetrain[:-2])
+
+		if symbols and (symbols[2:8] in self.__codes):
+			c = self.__codes[symbols[2:8]]
+			params = {
+				"id": int(symbols[8:24][::-1], 2),
+				"group": c[0],
+				"unit": c[1],
+				"command": c[2],
+			}
+			return self._name, params, tb, rep
 
 class PCPIR(RcProtocol): #pilota casa PIR sensor
 	def __init__(self):
@@ -551,12 +605,13 @@ protocols = [
 	Hama(),
 	Logilight(),
 	Emylo(),
-	PWM2(),
+	#PWM2(),
 	Voltcraft(),
 	#PDM32(),
 	#PCPIR(),
 	#PDM1(),
 	FS20(),
+	PilotaCasa()
 ]
 
 def get_protocol(name):
