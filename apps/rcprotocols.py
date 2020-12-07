@@ -185,7 +185,7 @@ class Tristate(TristateBase): #old intertechno
 	def decode(self, pulsetrain):
 		symbols, tb, rep = self._decode_symbols(pulsetrain[0:-2])
 		if symbols:
-			return self._name, {"code": symbols}, tb, rep
+			return {"code": symbols}, tb, rep
 
 class ITTristate(TristateBase): #old intertechno
 	def __init__(self):
@@ -206,13 +206,12 @@ class ITTristate(TristateBase): #old intertechno
 	def decode(self, pulsetrain):
 		symbols, tb, rep = self._decode_symbols(pulsetrain[0:-2])
 		if symbols:
-			params = {
+			return {
 				"house": chr(self._decode_int(symbols[:4]) + ord('A')),
 				"unit": self._decode_int(symbols[4:6]) + 1,
 				"group": self._decode_int(symbols[6:8]) + 1,
 				"command": self._decode_command(symbols[10:12].upper()),
-			}
-			return self._name, params, tb, rep
+			}, tb, rep
 
 class Brennenstuhl(TristateBase): #old intertechno
 	def __init__(self):
@@ -243,12 +242,11 @@ class Brennenstuhl(TristateBase): #old intertechno
 				if u == '0':
 					break 
 
-			params = {
+			return {
 				"dips": dips,
 				"unit": unit,
 				"command": self._decode_command(symbols[10:12].upper()),
-			}
-			return self._name, params, tb, rep
+			}, tb, rep
 
 class PPM1(RcProtocol): #Intertechno, Hama, ...
 	'''
@@ -294,12 +292,11 @@ class Intertechno(PPM1):
 	def decode(self, pulsetrain):
 		symbols, tb, rep = self._decode_symbols(pulsetrain[2:-2])
 		if symbols:
-			params = {
+			return {
 				"id": int(symbols[:26], 2),
 				"unit": self._decode_unit(symbols[28:32]),
 				"command": self._decode_command(symbols[27])
-			}
-			return self._name, params, tb, rep
+			}, tb, rep
 
 class Hama(Intertechno):
 	def __init__(self):
@@ -368,12 +365,11 @@ class Logilight(PWM1):
 	def decode(self, pulsetrain):
 		symbols, tb, rep = self._decode_symbols(pulsetrain[:-2])
 		if symbols:
-			params = {
+			return {
 				"id": int(symbols[:20], 2),
 				"unit": self._decode_unit(symbols[21:24]),
 				"command": self._decode_command(symbols[20])
-			}
-			return self._name, params, tb, rep
+			}, tb, rep
 
 class Emylo(PWM1):
 	def __init__(self):
@@ -391,11 +387,10 @@ class Emylo(PWM1):
 	def decode(self, pulsetrain):
 		symbols, tb, rep = self._decode_symbols(pulsetrain[:-2])
 		if symbols:
-			params = {
+			return {
 				"id": int(symbols[:20], 2),
 				"command": self._decode_command(symbols[-4:])
-			}
-			return self._name, params, tb, rep
+			}, tb, rep
 
 class FS20(RcProtocol):
 	def __init__(self):
@@ -438,12 +433,11 @@ class FS20(RcProtocol):
 	def decode(self, pulsetrain):
 		symbols, tb, rep = self._decode_symbols(pulsetrain[0:-2])
 		if symbols:
-			params = {
+			return {
 				"id": int(symbols[13:21] + symbols[22:30], 2),
 				"unit": int(symbols[31:39], 2) + 1,
 				"command": int(symbols[40:48], 2),
-			}
-			return self._name, params, tb, rep
+			}, tb, rep
 
 class Voltcraft(RcProtocol):
 	'''
@@ -483,12 +477,11 @@ class Voltcraft(RcProtocol):
 	def decode(self, pulsetrain):
 		symbols, tb, rep = self._decode_symbols(pulsetrain[1:-1])
 		if symbols:
-			params = {
+			return {
 				"id": int(symbols[0:12][::-1], 2),
 				"unit": int(symbols[12:14][::-1], 2) + 1,
 				"command": self._decode_command(symbols[14:17])
-			}
-			return self._name, params, tb, rep
+			}, tb, rep
 
 class PWM2(RcProtocol): 
 	'''
@@ -524,6 +517,7 @@ class PilotaCasa(PWM2):
 		'111101': (4, 1, 'on'), '110101': (4, 1, 'off'),
 		'010011': (4, 2, 'on'), '011101': (4, 2, 'off'),
 		'100011': (4, 3, 'on'), '101101': (4, 3, 'off'),
+		'101100': (-1, -1 , 'allon'), '011100': (-1, -1, 'alloff')
 	}
 
 	def __init__(self):
@@ -534,6 +528,9 @@ class PilotaCasa(PWM2):
 	def encode(self, params, timebase=None, repetitions=None):
 		symbols = '01'
 		u = None
+		if params["command"] in ["allon", "alloff"]:
+			params["unit"] = -1
+			params["group"] = -1
 		for k, v in self.__codes.items():
 			if v[0] == int(params["group"]) and v[1] == int(params["unit"]) and v[2] == params["command"]:
 				u = k
@@ -545,16 +542,14 @@ class PilotaCasa(PWM2):
 		
 	def decode(self, pulsetrain):
 		symbols, tb, rep = self._decode_symbols(pulsetrain[:-2])
-
 		if symbols and (symbols[2:8] in self.__codes):
 			c = self.__codes[symbols[2:8]]
-			params = {
+			return {
 				"id": int(symbols[8:24][::-1], 2),
 				"group": c[0],
 				"unit": c[1],
 				"command": c[2],
-			}
-			return self._name, params, tb, rep
+			}, tb, rep
 
 class PCPIR(RcProtocol): #pilota casa PIR sensor
 	def __init__(self):
@@ -595,7 +590,6 @@ protocols = [
 	Emylo(),
 	#PWM2(),
 	Voltcraft(),
-	#PDM32(),
 	#PCPIR(),
 	#PDM1(),
 	FS20(),
@@ -709,18 +703,19 @@ class RcTransceiver(threading.Thread):
 		self.__lock.release()
 
 	def __decode(self, train):
-		dec = None
 		res = []
 		succ = False
 		for p in protocols:
 			try:
-				dec = p.decode(train)
-			except:
-				continue
-			if dec:
-				print(dec)
-				succ = True
-		return res, succ
+				params, tb, rep = p.decode(train)
+				if params:
+					succ = True
+					if not rep:
+						res.append({"protocol": p._name, "params": params})	
+			except Exception as e:
+				pass
+
+		self.__rxcb(res if succ else None, train)
 
 	def send(self, protocol, params, timebase=None, repeats=None):
 		proto = get_protocol(protocol)

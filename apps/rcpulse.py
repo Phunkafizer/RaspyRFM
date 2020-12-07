@@ -17,10 +17,11 @@ parser.add_argument("-p", "--protocol", help=u"Protocol for sending")
 args, remainargs = parser.parse_known_args()
 
 def rxcb(dec, train):
-	for p in dec:
-		print(p)
-	if len(dec) == 0:
-		print(train)
+	if dec is None:
+		print("raw", train)
+		return
+	for d in dec:
+		print(d)
 
 if not raspyrfm_test(args.module, RFM69):
 	print("Error! RaspyRFM not found")

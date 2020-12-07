@@ -17,8 +17,21 @@ srvsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 srvsock.bind(('', 1989))
 srvsock.listen(5)
 
+clients = []
+
 def rxcb(dec, train):
-    pass
+    payload = None
+    if dec is None:
+        payload = {"raw": train}
+    else:
+        if len(dec) > 0:
+            payload = {"decode": dec, "raw": train}
+
+	print(payload)
+    if payload is not None:
+        for client in clients:
+            client.send(payload)
+
 
 if not raspyrfm_test(args.module, RFM69):
 	print("Error! RaspyRFM not found")
@@ -33,6 +46,9 @@ class clientthread(threading.Thread):
         self.__socket = socket
         threading.Thread.__init__(self)
 
+    def send(self, obj):
+        self.__socket.send(json.dumps(obj))
+
     def run(self):
         while True:
             chunk = self.__socket.recv(1024)
@@ -40,16 +56,18 @@ class clientthread(threading.Thread):
                 del self.__socket
                 break
             try:
-                print(chunk)
+                #print(chunk)
                 lock.acquire()
                 d = json.loads(chunk)
                 rctrx.send(d["protocol"], d["params"])
             except:
                 pass
             lock.release()
+        clients.remove(self)
 
 while True:
     (client, address) = srvsock.accept()
     ct = clientthread(client)
     ct.daemon = True
     ct.start()
+    clients.append(ct)
