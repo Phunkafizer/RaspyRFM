@@ -580,6 +580,36 @@ class PCPIR(RcProtocol): #pilota casa PIR sensor
 		self._add_finish()
 		return self._ookdata, self._timebase, self._repetitions
 
+class REVRitterShutter(RcProtocol):
+	'''
+	Pulse Width Modulation 24 bit, 
+	Short pulse: 0, long pulse: 1
+	Used by REV Ritter shutter contact SA-MC08-N04-D
+	'''
+	def __init__(self):
+		self._name = "revshutter"
+		self._timebase = 200
+		self._repetitions = 4
+		self._pattern = "[01]{24}"
+		self._symbols = {
+			'0': [1, 3],
+			'1': [3, 1],
+		}
+		self._footer = [1, 85]
+		self.params = [PARAM_ID]
+		RcProtocol.__init__(self)
+
+	def encode(self, params, timebase=None, repetitions=None):
+		symbols = "{:024b}".format(int(params["id"]))
+		return self._build_frame(symbols, timebase, repetitions)
+
+	def decode(self, pulsetrain):
+		symbols, tb, rep = self._decode_symbols(pulsetrain[0:-2])
+		if symbols:
+			return {
+				"id": int(symbols[0:24], 2),
+			}, tb, rep
+
 protocols = [
 	Tristate(),
 	ITTristate(),
@@ -593,7 +623,8 @@ protocols = [
 	#PCPIR(),
 	#PDM1(),
 	FS20(),
-	PilotaCasa()
+	PilotaCasa(),
+	REVRitterShutter()
 ]
 
 def get_protocol(name):
