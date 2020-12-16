@@ -1,4 +1,4 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python
 
 import socket
 import threading
@@ -27,10 +27,11 @@ def rxcb(dec, train):
         if len(dec) > 0:
             payload = {"decode": dec, "raw": train}
 
-	print(payload)
     if payload is not None:
+        print("RX", payload)
+        s = json.dumps(payload) + "\n"
         for client in clients:
-            client.send(payload)
+            client.send(s)
 
 
 if not raspyrfm_test(args.module, RFM69):
@@ -38,28 +39,32 @@ if not raspyrfm_test(args.module, RFM69):
 	exit()
 
 rctrx = rcprotocols.RcTransceiver(args.module, args.frequency, rxcb)
-
-lock = threading.Lock() 
+lock = threading.Lock()
 
 class clientthread(threading.Thread):
     def __init__(self, socket):
         self.__socket = socket
         threading.Thread.__init__(self)
 
-    def send(self, obj):
-        self.__socket.send(json.dumps(obj))
+    def send(self, s):
+        self.__socket.sendall(s.encode())
 
     def run(self):
+        buf = ""
         while True:
-            chunk = self.__socket.recv(1024)
+            chunk = self.__socket.recv(32).decode()
             if len(chunk) == 0:
                 del self.__socket
                 break
+            lock.acquire()
             try:
-                #print(chunk)
-                lock.acquire()
-                d = json.loads(chunk)
-                rctrx.send(d["protocol"], d["params"])
+                buf += chunk
+                while "\n" in buf:
+                    line = buf[:buf.find("\n")]
+                    buf = buf[buf.find("\n") + 1:]
+                    d = json.loads(line)
+                    print("TX", d)
+                    rctrx.send(d["protocol"], d["params"])
             except:
                 pass
             lock.release()

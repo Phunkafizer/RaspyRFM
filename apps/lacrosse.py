@@ -1,4 +1,4 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python
 
 from raspyrfm import *
 import sensors
@@ -12,7 +12,7 @@ if raspyrfm_test(2, RFM69):
 	rfm = RaspyRFM(2, RFM69) #when using the RaspyRFM twin
 elif raspyrfm_test(1, RFM69):
 	print("Found RaspyRFM single")
-	rfm = RaspyRFM(1, RFM69) #when using a single single 868 MHz RaspyRFM
+	rfm = RaspyRFM(1, RFM69) #when using a single 868 MHz RaspyRFM
 else:
 	print("No RFM69 module found!")
 	exit()

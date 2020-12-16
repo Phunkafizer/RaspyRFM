@@ -1,4 +1,4 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python
 
 from raspyrfm import *
 import sys
@@ -92,11 +92,11 @@ def Decode(frame):
 		valve = payload[1]
 		dst = payload[2] / 2.0
 		info += ", mode " + str(devflags & 0x03)
-		if (devflags & (1<<7)) <> 0:
+		if (devflags & (1<<7)) != 0:
 			info += ", bat err"
-		if (devflags & (1<<6)) <> 0:
+		if (devflags & (1<<6)) != 0:
 			info += ", com err"
-		if (devflags & (1<<5)) <> 0:
+		if (devflags & (1<<5)) != 0:
 			info += ", locked"
 		info += ", valve " + str(valve) + "%"
 		info += ", set T " + str(dst)

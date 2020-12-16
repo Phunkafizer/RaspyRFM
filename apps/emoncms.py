@@ -1,4 +1,4 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python
 
 from raspyrfm import *
 import sensors
@@ -6,7 +6,6 @@ from sensors import rawsensor
 import time
 import requests
 import json
-
 
 URL = 'https://emoncms.org/input/post.json'
 APIKEY = '123456789123456789'
@@ -44,7 +43,7 @@ def LogSensor(data):
         if s['sensorId'] == data['ID']:
             if data['ID'] in lasttimes:
                 if time.time() - lasttimes[data['ID']] < s['minInterval']:
-                    print "discarded value"
+                    print("discarded value")
                     return
             lasttimes[data['ID']] = time.time() 
 
@@ -55,9 +54,9 @@ def LogSensor(data):
 
             payload = {'apikey': APIKEY, 'node': s['node'], 'json': json.dumps(values)}
             r = requests.get(URL, params = payload)
-            print "Sending to emon:", payload, "Result:", r
+            print("Sending to emon:", payload, "Result:", r)
             return
-    print "No match for ID"
+    print("No match for ID")
 
 
 if raspyrfm_test(2, RFM69):
@@ -65,7 +64,7 @@ if raspyrfm_test(2, RFM69):
 elif raspyrfm_test(1, RFM69):
     rfm = RaspyRFM(1, RFM69) #when using a single single 868 MHz RaspyRFM
 else:
-    print "No RFM69 module found!"
+    print("No RFM69 module found!")
     exit()
 
 rfm.set_params(

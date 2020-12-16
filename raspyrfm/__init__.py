@@ -35,7 +35,7 @@ def RaspyRFM(mod, type):
 
 	"""
 	s = __get_hw_params(mod)
-	
+
 	if s:
 		if type == RFM69:
 			return rfm69.Rfm69(s[0], s[1])

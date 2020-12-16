@@ -12,7 +12,10 @@ PARAM_COMMAND = ('a', 'command')
 PARAM_CODE = ('c', 'code')
 PARAM_DIPS = ('d', 'dips')
 
-class RcProtocol:
+CLASS_RCSWITCH = "switch"
+CLASS_RCWEATHER = "weather"
+
+class RcPulse:
 	def __init__(self):
 		self.__numbits = 0
 		self._ookdata = bytearray()
@@ -22,21 +25,23 @@ class RcProtocol:
 		self._lastdecode = None
 		self._lastdecodetime = 0
 
-		sympulses = []
-		for i in self._symbols:
-			sympulses += self._symbols[i]
-		sympulses.sort(reverse=True)
-		i = 0
-		while i<len(sympulses) - 1:
-			if (sympulses[i] == sympulses[i+1]):
-				del sympulses[i]
-			else:
-				i += 1
-		p1 = sympulses.pop(0)
-		p2 = sympulses.pop(0)
-		f = (1.0 * p1 / p2 - 1) / (1.0 * p1/p2 + 2)
-		self._minwidth = self._timebase - self._timebase * f
-		self._maxwidth = self._timebase + self._timebase * f
+		symset = set()
+		for k in self._symbols:
+			symset |= set(self._symbols[k])
+
+		symlist = list(symset)
+		symlist.sort()
+		q = 0
+		for i in range(len(symlist) - 1):
+			if 1.0 * symlist[i] / symlist[i+1] > q:
+				q = 1.0 * symlist[i] / symlist[i+1]
+				p1 = 1.0 * symlist[i]
+				p2 = 1.0 * symlist[i+1]
+
+		f = (p2-p1) / (p2+p1)
+		
+		self._minwidth = self._timebase * (1 - f)
+		self._maxwidth = self._timebase * (1 + f)
 		
 	def _reset(self):
 		self.__numbits = 0
@@ -142,24 +147,25 @@ class RcProtocol:
 	def encode(self, params):
 		pass
 
-class TristateBase(RcProtocol): #Baseclass for old intertechno, Brennenstuhl, ...
+class TristateBase(RcPulse): #Baseclass for old intertechno, Brennenstuhl, ...
 	def __init__(self):
-		self._timebase = 300
+		if not hasattr(self, "_timebase"):
+			self._timebase = 300
 		self._repetitions = 4
-		self._pattern = "[01fF]{12}"
+		self._pattern = "[01F]{12}"
 		self._symbols = { 
-			'0': [1, 4, 1, 4],
-			'1': [4, 1, 4, 1],
-			'f': [1, 4, 4, 1],
-			'F': [1, 4, 4, 1],
+			'0': [1, 3, 1, 3],
+			'1': [3, 1, 3, 1],
+			'F': [1, 3, 3, 1],
 		}
 		self._footer = [1, 31]
-		RcProtocol.__init__(self)
+		self._class = CLASS_RCSWITCH
+		RcPulse.__init__(self)
 
 	def _encode_int(self, ival, digits):
 		code = ""
 		for i in range(digits):
-			code += "f" if (ival & 0x01) > 0 else "0"
+			code += "F" if (ival & 0x01) > 0 else "0"
 			ival >>= 1
 		return code
 
@@ -167,20 +173,20 @@ class TristateBase(RcProtocol): #Baseclass for old intertechno, Brennenstuhl, ..
 		i = 0
 		while tristateval != "":
 			i <<= 1
-			if tristateval[-1] != '0':
+			if tristateval[-1] == "F":
 				i |= 1
 			tristateval = tristateval[:-1]
 		return i
 
 
-class Tristate(TristateBase): #old intertechno
+class Tristate(TristateBase):
 	def __init__(self):
 		self._name = "tristate"
 		TristateBase.__init__(self)
 		self.params = [PARAM_CODE]
 
 	def encode(self, params, timebase=None, repetitions=None):
-		return self._build_frame(params["code"], timebase, repetitions)
+		return self._build_frame(params["code"].upper(), timebase, repetitions)
 
 	def decode(self, pulsetrain):
 		symbols, tb, rep = self._decode_symbols(pulsetrain[0:-2])
@@ -199,7 +205,7 @@ class ITTristate(TristateBase): #old intertechno
 		symbols += self._encode_int(ord(params["house"][0]) - ord('A'), 4)
 		symbols += self._encode_int(int(params["unit"]) - 1, 2)
 		symbols += self._encode_int(int(params["group"]) - 1, 2)
-		symbols += "0f"
+		symbols += "0F"
 		symbols += self._encode_command(params["command"])
 		return self._build_frame(symbols, timebase, repetitions)
 
@@ -210,10 +216,10 @@ class ITTristate(TristateBase): #old intertechno
 				"house": chr(self._decode_int(symbols[:4]) + ord('A')),
 				"unit": self._decode_int(symbols[4:6]) + 1,
 				"group": self._decode_int(symbols[6:8]) + 1,
-				"command": self._decode_command(symbols[10:12].upper()),
+				"command": self._decode_command(symbols[10:12]),
 			}, tb, rep
 
-class Brennenstuhl(TristateBase): #old intertechno
+class Brennenstuhl(TristateBase):
 	def __init__(self):
 		self._name = "brennenstuhl"
 		TristateBase.__init__(self)
@@ -248,7 +254,7 @@ class Brennenstuhl(TristateBase): #old intertechno
 				"command": self._decode_command(symbols[10:12].upper()),
 			}, tb, rep
 
-class PPM1(RcProtocol): #Intertechno, Hama, ...
+class PPM1(RcPulse): #Intertechno, Hama, Nexa, Telldus, ...
 	'''
 	PDM1: Pulse Position Modulation
 	Every bit consists of 2 shortpulses. Long distance between these pulses 2 pulses -> 1, else -> 0
@@ -265,15 +271,16 @@ class PPM1(RcProtocol): #Intertechno, Hama, ...
 			'1': [1, 5, 1, 1],
 		}
 		self._footer = [1, 39]
-		RcProtocol.__init__(self)
+		self._class = CLASS_RCSWITCH
+		RcPulse.__init__(self)
 
 class Intertechno(PPM1):
 	def __init__(self):
-		PPM1.__init__(self)
 		self._name = "intertechno"
-		self._timebase = 275
 		self.params = [PARAM_ID, PARAM_UNIT, PARAM_COMMAND]
 		self._commands = {"on": "1", "off": "0"}
+		self._timebase = 275
+		PPM1.__init__(self)
 
 	def _encode_unit(self, unit):
 		return "{:04b}".format(int(unit) - 1)
@@ -311,9 +318,9 @@ class Hama(Intertechno):
 		return 16 - int(unit, 2)
 
 		
-class PWM1(RcProtocol):
+class PWM1(RcPulse):
 	'''
-	PWM1: Pulse Width Modulation
+	PWM1: Pulse Width Modulation 24 bit
 	Wide pulse -> 1, small pulse -> 0
 	Frame: header, payload, footer
 	Used by Emylo, Logilight, ...
@@ -327,14 +334,15 @@ class PWM1(RcProtocol):
 			'0': [1, 3],
 		}
 		self._footer = [1, 31]
-		RcProtocol.__init__(self)
+		self._class = CLASS_RCSWITCH
+		RcPulse.__init__(self)
 
 class Logilight(PWM1):
 	def __init__(self):
-		PWM1.__init__(self)
 		self._name = "logilight"
 		self.params = [PARAM_ID, PARAM_UNIT, PARAM_COMMAND]
 		self._commands = {"on": "1", "learn": "1", "off": "0"}
+		PWM1.__init__(self)
 
 	def _encode_unit(self, unit):
 		res = ""
@@ -373,10 +381,10 @@ class Logilight(PWM1):
 
 class Emylo(PWM1):
 	def __init__(self):
-		PWM1.__init__(self)
 		self._name = "emylo"
 		self.params = [PARAM_ID, PARAM_COMMAND]
 		self._commands = {'A': '0001', 'B': '0010', 'C': '0100', 'D': '1000'}
+		PWM1.__init__(self)
 
 	def encode(self, params, timebase=None, repetitions=None):
 		symbols = ""
@@ -392,7 +400,7 @@ class Emylo(PWM1):
 				"command": self._decode_command(symbols[-4:])
 			}, tb, rep
 
-class FS20(RcProtocol):
+class FS20(RcPulse):
 	def __init__(self):
 		self._name = "fs20"
 		self._timebase = 200
@@ -405,7 +413,8 @@ class FS20(RcProtocol):
 		self._header = [2, 2] * 12 + [3, 3]
 		self._footer = [1, 100]
 		self.params = [PARAM_ID,PARAM_UNIT, PARAM_COMMAND]
-		RcProtocol.__init__(self)
+		self._class = CLASS_RCSWITCH
+		RcPulse.__init__(self)
 		
 	def __encode_byte(self, b):
 		b &= 0xFF
@@ -439,7 +448,7 @@ class FS20(RcProtocol):
 				"command": int(symbols[40:48], 2),
 			}, tb, rep
 
-class Voltcraft(RcProtocol):
+class Voltcraft(RcPulse):
 	'''
 	PPM: Pulse Position Modulation
 	Pulse in middle of a symbol: 0, end of symbol: 1
@@ -458,7 +467,8 @@ class Voltcraft(RcProtocol):
 		self._footer = [132]
 		self.params = [PARAM_ID, PARAM_UNIT, PARAM_COMMAND]
 		self._commands = {"off": "000", "alloff": "100", "on": "010", "allon": "110", "dimup": "101", "dimdown": "111"}
-		RcProtocol.__init__(self)
+		self._class = CLASS_RCSWITCH
+		RcPulse.__init__(self)
 
 	def encode(self, params, timebase=None, repetitions=None):
 		if params["command"] in ["on", "off"]:
@@ -483,27 +493,11 @@ class Voltcraft(RcProtocol):
 				"command": self._decode_command(symbols[14:17])
 			}, tb, rep
 
-class PWM2(RcProtocol): 
+class PilotaCasa(RcPulse):
 	'''
-	PWM2: Pulse Width Modulation
+	Pulse Width Modulation 32 bit
 	Wide pulse -> 0, small pulse -> 1
-	Frame: header, payload, footer
-	Used by Pilota casa
 	'''
-	def __init__(self):
-		self._name = "pwm2"
-		self._timebase = 600
-		self._repetitions = 10
-		self._pattern = "[01]{32}"
-		self._symbols = { 
-			'1': [1, 2],
-			'0': [2, 1],
-		}
-		self._footer = [1, 11]
-		self.params = [PARAM_CODE]
-		RcProtocol.__init__(self)
-
-class PilotaCasa(PWM2):
 	__codes = {
 		'110001': (1, 1, 'on'), '111110': (1, 1, 'off'),
 		'011001': (1, 2, 'on'), '010001': (1, 2, 'off'),
@@ -521,9 +515,18 @@ class PilotaCasa(PWM2):
 	}
 
 	def __init__(self):
-		PWM2.__init__(self)
 		self._name = "pilota"
+		self._timebase = 550
+		self._repetitions = 5
+		self._pattern = "[01]{32}"
+		self._symbols = { 
+			'1': [1, 2],
+			'0': [2, 1],
+		}
+		self._footer = [1, 12]
 		self.params = [PARAM_ID, PARAM_GROUP, PARAM_UNIT, PARAM_COMMAND]
+		self._class = CLASS_RCSWITCH
+		RcPulse.__init__(self)
 
 	def encode(self, params, timebase=None, repetitions=None):
 		symbols = '01'
@@ -551,36 +554,33 @@ class PilotaCasa(PWM2):
 				"command": c[2],
 			}, tb, rep
 
-class PCPIR(RcProtocol): #pilota casa PIR sensor
+class PCPIR(TristateBase): #pilota casa PIR sensor
+	'''
+	Pilota Casa IR sensor
+	'''
 	def __init__(self):
 		self._name = "pcpir"
-		self._timebase = 400
-		self._repetitions = 5
-		self._pattern = "[01]{12}"
-		self._symbols = { 
-			'1': [1, 3, 1, 3],
-			'0': [1, 3, 3, 1],
-		}
-		RcProtocol.__init__(self)
-		self._parser.add_argument("-c", "--code", required=True)
+		self.params = [PARAM_ID, PARAM_COMMAND]
+		self._timebase = 500
+		self._commands = {"off": "0", "on": "F"}
+		TristateBase.__init__(self)
+
+	def encode(self, params, timebase=None, repetitions=None):
+		symbols = ""
+		return self._build_frame(symbols, timebase, repetitions)
 
 	def decode(self, pulsetrain):
-		code, tb, rep = self._decode_symbols(pulsetrain[0:-2])
-		if code:
+		symbols, tb, rep = self._decode_symbols(pulsetrain[0:-2])
+		if symbols:
+			print("PCIR", symbols, pulsetrain)
 			return {
-				"protocol": self._name,
-				"code": code,
-				"timebase": tb,
-			}, rep
+				"id": self._decode_int(symbols[5:10]),
+				"unit": self._decode_int(symbols[0:5]),
+				"command": self._decode_command(symbols[11:12])
+			}, tb, rep
 
-	def encode(self, args):
-		self._reset()
-		self._add_symbols(args.code)
-		self._add_pulses([1, 12])
-		self._add_finish()
-		return self._ookdata, self._timebase, self._repetitions
 
-class REVRitterShutter(RcProtocol):
+class REVRitterShutter(RcPulse):
 	'''
 	Pulse Width Modulation 24 bit, 
 	Short pulse: 0, long pulse: 1
@@ -597,7 +597,8 @@ class REVRitterShutter(RcProtocol):
 		}
 		self._footer = [1, 85]
 		self.params = [PARAM_ID]
-		RcProtocol.__init__(self)
+		self._class = CLASS_RCSWITCH
+		RcPulse.__init__(self)
 
 	def encode(self, params, timebase=None, repetitions=None):
 		symbols = "{:024b}".format(int(params["id"]))
@@ -610,6 +611,91 @@ class REVRitterShutter(RcProtocol):
 				"id": int(symbols[0:24], 2),
 			}, tb, rep
 
+class WH2(RcPulse):
+	'''
+	Temperature & humidity sensor WH2, Telldus
+	Pulse Duration Modulation
+	Short, middle = 1, long middle = 0
+	'''
+	def __init__(self):
+		self._name = "wh2"
+		self._class = CLASS_RCWEATHER
+		self._timebase = 500
+		self._pattern = "11111111[01]{39}"
+		self._symbols = {
+			'1': [1, 2],
+			'0': [3, 2],
+		}
+		self._footer = [2, 49]
+		RcPulse.__init__(self)
+
+	def decode(self, pulsetrain):
+		symbols, tb, rep = self._decode_symbols(pulsetrain[0:-2])
+		if symbols:
+			symbols += "0"
+			res = {}
+
+			res["id"] = "{:02x}".format(int(symbols[12:20], 2))
+			T = int(symbols[20:32], 2)
+			if T >= 1<<11:
+				T -= 1<<12
+			T /= 10.0
+			res["T"] = T
+
+			RH = int(symbols[32:40], 2)
+			if RH != 0xFF:
+				res["RH"] = RH
+			
+			return res, tb, rep
+
+class WS7000(RcPulse):
+	'''
+	Temperature & humidity sensor LaCrosee/ELV
+	Pulse Width Modulation
+	Short = 1, long = 2
+	'''
+	def __init__(self):
+		self._name = "ws7000"
+		self._class = CLASS_RCWEATHER
+		self._timebase = 400
+		self._pattern = "^0{5,}1([01]{4}1){6,}[01]{4,5}$"
+		self._symbols = {
+			'1': [1, 2],
+			'0': [2, 1],
+		}
+		self._footer = [2, 49]
+		RcPulse.__init__(self)
+
+	def decode(self, pulsetrain):
+		symbols, tb, rep = self._decode_symbols(pulsetrain[0:-2])
+		if symbols:
+			symbols = symbols[symbols.find("000001") + 6:]
+			n = [] #nibbles
+			i = 0
+			check = 0
+			while i <= len(symbols) - 4:
+				n.append(int(symbols[i:i+4][::-1], 2))
+				i += 5
+				if i <= len(symbols) - 4:
+					check ^= n[-1]
+			if check != 0:
+				return
+
+			res = {}
+			res["id"] = (n[0] << 4) | (n[1] & 0x07)
+
+			if n[0] == 1: #WS7000 has subtypes
+				#WS7000-22/25
+				t = n[2] * 0.1 + n[3] * 1 + n[4] * 10
+				if (n[1] & 0x8) == 0x8:
+					t = -t
+				res["T"] = t
+				res["unit"] = n[1] & 0x7
+				h = n[5] * 0.1 + n[6] * 1 + n[7] * 10
+				if h > 0:
+					res["RH"] = h
+				return res, tb, rep
+
 protocols = [
 	Tristate(),
 	ITTristate(),
@@ -618,13 +704,13 @@ protocols = [
 	Hama(),
 	Logilight(),
 	Emylo(),
-	#PWM2(),
 	Voltcraft(),
-	#PCPIR(),
-	#PDM1(),
+	PCPIR(),
 	FS20(),
 	PilotaCasa(),
-	REVRitterShutter()
+	REVRitterShutter(),
+	WH2(),
+	WS7000(),
 ]
 
 def get_protocol(name):
@@ -632,7 +718,6 @@ def get_protocol(name):
 		if p._name == name:
 			return p
 	return None
-
 
 RXDATARATE = 20.0 #kbit/s	
 class RfmPulseTRX(threading.Thread):
@@ -742,7 +827,7 @@ class RcTransceiver(threading.Thread):
 				if params:
 					succ = True
 					if not rep:
-						res.append({"protocol": p._name, "params": params})	
+						res.append({"protocol": p._name, "class": p._class, "params": params})	
 			except Exception as e:
 				pass
 

@@ -30,7 +30,7 @@ rfm.set_params(
 
 ## connair.py
 emulate a gateway for controlling RC sockets via the app power-switch. Compatible to "Brennenstuhl Brematic", Intertechno "ITGW-433", "ConnAir"
-see https://power-switch.eu/
+Here you find a python client controlling this gateway: https://github.com/markusressel/raspyrfm-client 
 
 ## emoncms.py
 receive lacrosse-sensors with the RaspyRFM and post them to the open energy monitor, see https://openenergymonitor.org/
@@ -67,3 +67,8 @@ La crosse {'batlo': False, 'AFC': 376, 'init': False, 'T': (19.7, 'C'), 'RSSI': 
 
 ## Product
 [Module RaspbyRFM Seegel Systeme](http://www.seegel-systeme.de/produkt/raspyrfm-ii/)
+
+## Blog articles
+* [Software installation & examples (german)](http://www.seegel-systeme.de/2015/09/02/ein-funkmodul-fuer-den-raspberry-raspyrfm/)
+* [Control RC switches with RaspyRFM (german)](https://www.seegel-systeme.de/2015/09/05/funksteckdosen-mit-dem-raspberry-pi-steuern/)
+* [Receive lacrosse sensors (german)](http://www.seegel-systeme.de/2015/02/07/funkthermometer/)

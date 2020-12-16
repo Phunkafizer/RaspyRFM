@@ -1,4 +1,4 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python
 
 from raspyrfm import *
 import sys
@@ -113,7 +113,7 @@ def calcword(datain):
 		result |= d
 	return result
 
-print "Waiting for sensors..."
+print("Waiting for sensors...")
 while 1:
 	data = rfm.receive(56)
 	data = descramble(data[0])
