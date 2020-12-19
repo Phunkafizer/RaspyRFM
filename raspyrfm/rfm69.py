@@ -1,3 +1,5 @@
+from __future__ import print_function
+import sys
 import RPi.GPIO as GPIO
 import spidev
 import threading
@@ -181,7 +183,7 @@ class Rfm69(threading.Thread):
 
 	def __init__(self, cs = 0, gpio_int = 25):
 		if not self.test(cs, gpio_int):
-			print("ERROR! RFM69 not found")
+			print("ERROR! RFM69 not found", file=sys.stderr)
 			return
 
 		self.__event = threading.Event()
@@ -195,7 +197,7 @@ class Rfm69(threading.Thread):
 		self.__packet_format = PacketFormat_Fixed
 		self.__aes_on = False
 
-		print("RFM69 found on CS " + str(cs))
+		print("RFM69 found on CS " + str(cs), file=sys.stderr)
 		GPIO.setmode(GPIO.BCM)
 		GPIO.setup(gpio_int, GPIO.IN)
 		GPIO.add_event_detect(gpio_int, GPIO.RISING, callback=self.__rfm_irq)
@@ -266,7 +268,7 @@ class Rfm69(threading.Thread):
 
 		self.mode_standby()
 		threading.Thread.__init__(self)
-		print("Init complete.")
+		print("Init complete.", file = sys.stderr)
 
 	def run(self):
 		while True:
@@ -429,7 +431,7 @@ class Rfm69(threading.Thread):
 				self.__packet_format = value
 
 			else:
-				print("Unrecognized option >>" + key + "<<")
+				print("Unrecognized option >>" + key + "<<", file=sys.stderr)
 
 		self.mode_standby()
 		self.__mutex.release()
