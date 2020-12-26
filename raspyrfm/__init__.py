@@ -1,4 +1,4 @@
-import rfm69
+from . import rfm69
 
 RFM69 = 1
 RFM9x = 2
