@@ -1,0 +1,16 @@
+[Unit]
+Description=RaspyRFM la crosse gateway
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=10
+User=pi
+ExecStart=/home/pi/dev/rfmgithub/apps/lacrossegw.py
+StandardOutput=null
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
