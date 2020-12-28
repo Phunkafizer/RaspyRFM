@@ -66,6 +66,13 @@
             padding-right: 0.1em;
             font-size: 1.2em;
         }
+
+        span.trend {
+            font-size: 0.7em;
+            font-weight: lighter;
+            color: silver;
+            padding-left: 0.5em;
+        }
     </style>
 
     <title>Raumklima</title>
@@ -86,7 +93,7 @@
         detailId = null;
     
     function drawDetails(sensor) {
-        function createMeasure(name, field, unit) {
+        function createMeasure(name, field, unit, valadd="") {
             var v = sensor.hasOwnProperty(field) ? sensor[field] : "---";
             return $("<div>").addClass("col-4 col-sm-3 col-md-2 col-lg-1")
                 .append($("<div>").addClass("sensorheader d-flex justify-content-between")
@@ -215,12 +222,13 @@
 
             $("#sensorrow").empty();
             $.each(data["sensors"], function(idx, val) {
-                var t = 'T' in val ? val["T"] : '---';
-                var rh = ('RH' in val) ? val["RH"] : '---';
-                var ah = ('AH' in val)  ? val["AH"] : '---';
-                var rhStatus = val["rhStatus"] == "high" ? "high" : val["rhStatus"] == "low" ? "low" : "";
-                var tStatus = val["tStatus"] == "high" ? "high" : val["tStatus"] == "low" ? "low" : "";
-                var ahRat = 'AHratio' in val ? val["AHratio"] : '---';
+                let t = 'T' in val ? val["T"] : '---';
+                let rh = ('RH' in val) ? val["RH"] : '---';
+                let ah = ('AH' in val)  ? val["AH"] : '---';
+                let rhStatus = val["rhStatus"] == "high" ? "high" : val["rhStatus"] == "low" ? "low" : "";
+                let tStatus = val["tStatus"] == "high" ? "high" : val["tStatus"] == "low" ? "low" : "";
+                let ahRat = 'AHratio' in val ? val["AHratio"] : '---';
+                let ventdiff = 'RHvent' in val ? (val["RHvent"] - val["RH"]) : '';
 
                 $("#sensorrow")
                     .append($("<div>").addClass("sensorpanel col-6 col-sm-4 col-md-3 col-lg-2")
@@ -247,7 +255,9 @@
                                     .append($("<span>").addClass("measureunit").text("°C"))
                                 )
                                 .append($("<div>").addClass("measure flex-fill d-flex justify-content-between")
-                                    .append($("<span>").addClass("measurevalue").addClass(rhStatus).text(rh))
+                                    .append($("<span>").addClass("measurevalue").addClass(rhStatus).text(rh)
+                                        .append($("<span>").addClass("trend").text(( (ventdiff && (ventdiff >= 0)) ? "+" : "") + ventdiff))
+                                    )
                                     .append($("<span>").addClass("measureunit").text("%"))
                                 )
                             )
