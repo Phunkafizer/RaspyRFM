@@ -9,6 +9,8 @@ import threading
 import math
 import json
 from datetime import datetime
+import apiserver
+import os
 
 try:
     #python2.7
@@ -24,7 +26,8 @@ except ImportError:
 
 lock = threading.Lock()
 
-with open("lacrossegw.conf") as jfile:
+script_dir = os.path.dirname(__file__)
+with open(script_dir + "/lacrossegw.conf") as jfile:
     config = json.load(jfile)
 
 if raspyrfm.raspyrfm_test(2, raspyrfm.RFM69):
@@ -112,7 +115,7 @@ def writeInflux(payload):
         "fields": {
             "T": T
         },
-        "tags": {"sensor": payload["ID"] if not ("room" in payload) else payload["room"]}
+        "tags": {"sensor": payload["id"] if not ("room" in payload) else payload["room"]}
     }
 
     if ("RH" in payload):
@@ -182,7 +185,7 @@ class MyHttpRequestHandler(Handler):
             else:
                 sensor = {}
                 sensor["room"] = csens["name"]
-            sensor["ID"] = id
+            sensor["id"] = id
             resp["sensors"].append(sensor)
 
         for id in cache:
@@ -234,6 +237,8 @@ server_thread = threading.Thread(target=server.serve_forever)
 server_thread.daemon = True
 server_thread.start()
 
+apisrv = apiserver.ApiServer(1990)
+
 print("Waiting for sensors...")
 
 while 1:
@@ -243,8 +248,8 @@ while 1:
         sensorObj = sensors.rawsensor.CreateSensor(rxObj)
         sensorData = sensorObj.GetData()
         payload = {}
-        ID = sensorData["ID"]
-        payload["ID"] = ID
+        id = sensorData["ID"]
+        payload["id"] = id
         T = sensorData["T"][0]
         payload["T"] = T
     except:
@@ -256,7 +261,7 @@ while 1:
     payload["init"] = sensorData["init"]
     lock.acquire()
     for csens in config["sensors"]:
-        if sensorData['ID'] == csens["id"]:
+        if id == csens["id"]:
             payload["room"] = csens["name"]
             break
 
@@ -282,26 +287,35 @@ while 1:
         v = math.log10(DD/6.1078)
         payload["DEW60"] = round(b*v/(a-v), 1)
 
-    if not ID in cache:
-        cache[ID] = {}
-        cache[ID]["count"] = 1
-        cache[ID]["payload"] = payload
-        cache[ID]["payload"]["tMin"] = T
-        cache[ID]["payload"]["tMax"] = T
+    apipayl = {
+        "decode": [{
+            "protocol": "lacrosse",
+            "params": payload,
+            "class": "weather"
+        }]
+    }
+    apisrv.send(apipayl)
+
+    if not id in cache:
+        cache[id] = {}
+        cache[id]["count"] = 1
+        cache[id]["payload"] = payload
+        cache[id]["payload"]["tMin"] = T
+        cache[id]["payload"]["tMax"] = T
     else:
-        payload["tMin"] = cache[ID]["payload"]["tMin"]
-        payload["tMax"] = cache[ID]["payload"]["tMax"]
+        payload["tMin"] = cache[id]["payload"]["tMin"]
+        payload["tMax"] = cache[id]["payload"]["tMax"]
         if payload["tMin"] > T:
             payload["tMin"] = T
         if payload["tMax"] < T:
             payload["tMax"] = T
         
-        cache[ID]["payload"] = payload
+        cache[id]["payload"] = payload
 
-    cache[ID]["ts"] = datetime.now()
-    cache[ID]["count"] += 1
+    cache[id]["ts"] = datetime.now()
+    cache[id]["count"] += 1
 
-    line = u" ID: {:2}  ".format(ID);
+    line = u" id: {:2}  ".format(id)
     line += u'room {:12}  '.format(payload["room"][:12] if ("room" in payload) else "---")
     line += u' T: {:5} \u00b0C  '.format(payload["T"])
     if "RH" in payload:
@@ -310,7 +324,7 @@ while 1:
     line += "init: " + ("true   " if payload["init"] else "false  ")
 
     print('------------------------------------------------------------------------------')
-    print(line)
+    print(line).encode("utf-8")
     lock.release()
 
     try:
@@ -321,6 +335,6 @@ while 1:
 
     try:
         if mqttClient:
-            mqttClient.publish('home/lacrosse/'+ payload['ID'], json.dumps(payload))
+            mqttClient.publish('home/lacrosse/'+ payload['id'], json.dumps(payload))
     except:
         pass
