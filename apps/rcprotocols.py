@@ -197,6 +197,7 @@ class ITTristate(TristateBase): #old intertechno
 	def __init__(self):
 		self._name = "ittristate"
 		TristateBase.__init__(self)
+		self._pattern = "[0F]{8}0F(FF|F0)"
 		self.params = [PARAM_HOUSE, PARAM_GROUP, PARAM_UNIT, PARAM_COMMAND]
 		self._commands = {"on": "FF", "off": "F0"}
 
@@ -223,7 +224,7 @@ class Brennenstuhl(TristateBase):
 	def __init__(self):
 		self._name = "brennenstuhl"
 		TristateBase.__init__(self)
-		self._pattern = "[0f]{5}(0fff|f0ff|ff0f|fff0)f(0f|f0)"
+		self._pattern = "[0F]{5}(0FFF|F0FF|FF0F|FFF0)F(0F|F0)"
 		self.params = [PARAM_DIPS, PARAM_UNIT, PARAM_COMMAND]
 		self._commands = {"on": "0F", "off": "F0"}
 
