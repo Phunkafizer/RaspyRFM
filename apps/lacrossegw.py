@@ -211,7 +211,7 @@ class MyHttpRequestHandler(Handler):
             self.getjson()
 
         elif p == '/':
-            self.path = 'index.html'
+            self.path = script_dir + '/index.html'
             return Handler.do_GET(self)
 
         elif p == '/history' and influxClient and name:
@@ -228,6 +228,11 @@ class MyHttpRequestHandler(Handler):
 
 
 class Server(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    def __init__(self, server_address, RequestHandlerClass):
+        self.allow_reuse_address = True
+        socketserver.TCPServer.__init__(self, server_address, RequestHandlerClass, bind_and_activate=False)
+        self.server_bind()
+        self.server_activate()
     pass
 
 cache = {}

@@ -223,6 +223,7 @@ class Brennenstuhl(TristateBase):
 	def __init__(self):
 		self._name = "brennenstuhl"
 		TristateBase.__init__(self)
+		self._pattern = "[0f]{5}(0fff|f0ff|ff0f|fff0)f(0f|f0)"
 		self.params = [PARAM_DIPS, PARAM_UNIT, PARAM_COMMAND]
 		self._commands = {"on": "0F", "off": "F0"}
 
@@ -572,7 +573,6 @@ class PCPIR(TristateBase): #pilota casa PIR sensor
 	def decode(self, pulsetrain):
 		symbols, tb, rep = self._decode_symbols(pulsetrain[0:-2])
 		if symbols:
-			print("PCIR", symbols, pulsetrain)
 			return {
 				"id": self._decode_int(symbols[5:10]),
 				"unit": self._decode_int(symbols[0:5]),

@@ -111,7 +111,7 @@
         $("#detailrow")
             .html($("<div>").addClass("sensorpanel col-12")
                 .append($("<div>").addClass("sensor row")
-                    .append(createMeasure("ID", "ID", ""))
+                    .append(createMeasure("ID", "id", ""))
                     .append(createMeasure("Temp.", "T", "°C"))
                     .append(createMeasure("RH", "RH", "%"))
                     .append(createMeasure("AH", "AH", "g/m³"))
@@ -232,11 +232,11 @@
 
                 $("#sensorrow")
                     .append($("<div>").addClass("sensorpanel col-6 col-sm-4 col-md-3 col-lg-2")
-                        .append($("<div>").addClass("sensor").data("ID", val["ID"]).data("values", val)
+                        .append($("<div>").addClass("sensor").data("id", val["id"]).data("values", val)
                             .append($("<div>").addClass("sensorheader d-flex justify-content-between")
                                 .append($("<div>")
                                     .addClass('sensortitle')
-                                    .text('room' in val ? val["room"] : val["ID"])
+                                    .text('room' in val ? val["room"] : val["id"])
                                 )
                                 .append($("<div>")
                                     .addClass('sensoricons')
@@ -288,12 +288,12 @@
                     $("div.sensor").removeClass("selected");
                     $(this).addClass("selected");
                     var val = $(this).data("values");
-                    detailId = ($(this).data("values").ID);
+                    detailId = ($(this).data("values").id);
                     drawDetails($(this).data("values"));
                     drawChart(val);
                 })
                 .each(function (index, element) {
-                    if (detailId == $(element).data('values').ID) {
+                    if (detailId == $(element).data('values').id) {
                         $(element).click();
                         return false;
                     }
