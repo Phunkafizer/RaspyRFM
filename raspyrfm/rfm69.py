@@ -159,7 +159,7 @@ DIO0_PM_PLLLOCK = 3
 PacketFormat_Fixed = 0
 PacketFormat_Variable = 1
 
-class Rfm69(threading.Thread):
+class Rfm69():
 	@staticmethod
 	def test(cs, gpio_dio0):
 		spi = spidev.SpiDev()
@@ -168,13 +168,13 @@ class Rfm69(threading.Thread):
 		#Testing presence of module
 		err = False
 		for i in range(8):
-			spi.xfer2([(RegSyncValue1 + i) | 0x80, 0x55])
-			test = spi.xfer2([(RegSyncValue1 + i), 0x00])[1]
+			spi.xfer3([(RegSyncValue1 + i) | 0x80, 0x55])
+			test = spi.xfer3([(RegSyncValue1 + i), 0x00])[1]
 			if test != 0x55:
 				err = True
 				break
-			temp = spi.xfer2([(RegSyncValue1 + i) | 0x80, 0xAA])
-			test = spi.xfer2([(RegSyncValue1 + i), 0x00])[1]
+			temp = spi.xfer3([(RegSyncValue1 + i) | 0x80, 0xAA])
+			test = spi.xfer3([(RegSyncValue1 + i), 0x00])[1]
 			if test != 0xAA:
 				err = True
 				break
@@ -189,7 +189,7 @@ class Rfm69(threading.Thread):
 		self.__event = threading.Event()
 		self.__spi = spidev.SpiDev()
 		self.__spi.open(0, cs)
-		self.__spi.max_speed_hz=int(5E6)
+		self.__spi.max_speed_hz=int(2E6)
 		self.__gpio_int = gpio_int
 		self.__mutex = threading.Lock()
 		self.__syncsize = 4
@@ -267,18 +267,13 @@ class Rfm69(threading.Thread):
 			self.__write_reg(key, config[key])
 
 		self.mode_standby()
-		threading.Thread.__init__(self)
 		print("Init complete.", file = sys.stderr)
-
-	def run(self):
-		while True:
-			time.sleep(0.5)
 
 	def __rfm_irq(self, ch):
 		self.__event.set()
 
 	def __write_reg(self, reg, val):
-		temp = self.__spi.xfer2([(reg & 0x7F) | 0x80, val & 0xFF])
+		temp = self.__spi.xfer3([(reg & 0x7F) | 0x80, int(val & 0xFF)])
 
 	def __write_reg_word(self, reg, val):
 		self.__write_reg(reg, (val >> 8) & 0xFF)
@@ -290,10 +285,13 @@ class Rfm69(threading.Thread):
 		self.__write_reg(reg, temp)
 
 	def __set_dio_mapping(self, dio, mapping):
-		if ((dio >= 0) and (dio <=3)):
-			self.__set_reg(RegDioMapping1, 0xC0 >> (dio * 2), mapping << (6 - dio * 2))
-		elif (dio == 5):
-			self.__set_reg(RegDioMapping2, 0x03 << 4, mapping << 4)
+		if dio > 3:
+			reg = RegDioMapping2
+			dio -= 3
+		else:
+			reg = RegDioMapping1
+		dio *= 2
+		self.__set_reg(reg, 0xC0 >> dio, mapping << (6 - dio))
 
 	def __set_mode(self, mode):
 		self.__write_reg(RegOpMode, mode << 2)
@@ -302,18 +300,18 @@ class Rfm69(threading.Thread):
 			pass
 
 	def read_reg(self, reg):
-		temp = self.__spi.xfer2([reg & 0x7F, 0x00])
-		return temp[1]
+		temp = self.__spi.xfer3([reg & 0x7F, 0x00])
+		return int(temp[1])
 
 	def read_fifo_burst(self, len):
-		temp = self.__spi.xfer2([0x00] + [0x00] * len)
+		temp = self.__spi.xfer3([0x00] + [0x00] * len)
 		return temp[1:]
 
 	def write_fifo_burst(self, data):
-		self.__spi.xfer2([0x80] + list(data))
+		self.__spi.xfer3([0x80] + list(data))
 
 	def read_reg_word(self, reg):
-		temp = self.__spi.xfer2([reg & 0x7F, 0x00, 0x00])
+		temp = self.__spi.xfer3([reg & 0x7F, 0x00, 0x00])
 		return (temp[1] << 8) | (temp[2])
 
 	def read_rssi_value(self):
