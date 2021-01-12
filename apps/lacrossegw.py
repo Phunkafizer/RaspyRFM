@@ -236,13 +236,14 @@ class Server(socketserver.ThreadingMixIn, socketserver.TCPServer):
     pass
 
 cache = {}
-
-server = Server(('0.0.0.0', 8080), MyHttpRequestHandler)
+p = config["webport"] if "webport" in config else 8080
+server = Server(('0.0.0.0', p), MyHttpRequestHandler)
 server_thread = threading.Thread(target=server.serve_forever)
 server_thread.daemon = True
 server_thread.start()
 
-apisrv = apiserver.ApiServer(1990)
+p = config["apiport"] if "apiport" in config else 1990
+apisrv = apiserver.ApiServer(p)
 
 print("Waiting for sensors...")
 
