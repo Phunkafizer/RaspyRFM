@@ -22,7 +22,6 @@ except ImportError:
     import socketserver
     from http.server import SimpleHTTPRequestHandler as Handler
     from urllib.parse import urlparse, parse_qs
-    
 
 lock = threading.Lock()
 
@@ -43,9 +42,9 @@ else:
 try:
     from influxdb import InfluxDBClient
     influxClient = InfluxDBClient(
-        host=config["influxdb"]["host"], 
-        port=config["influxdb"]["port"], 
-        username=config["influxdb"]["user"], 
+        host=config["influxdb"]["host"],
+        port=config["influxdb"]["port"],
+        username=config["influxdb"]["user"],
         password=config["influxdb"]["pass"]
     )
 
@@ -175,7 +174,7 @@ class MyHttpRequestHandler(Handler):
         self.end_headers()
         resp = {"sensors": []}
         idlist = []
-        
+
         lock.acquire()
         for csens in config["sensors"]:
             id = csens["id"]
@@ -199,7 +198,7 @@ class MyHttpRequestHandler(Handler):
         lock.release()
 
         self.wfile.write(json.dumps(resp).encode())
-    
+
     def do_GET(self):
         url = urlparse(self.path)
         p = url.path
@@ -242,7 +241,7 @@ server_thread = threading.Thread(target=server.serve_forever)
 server_thread.daemon = True
 server_thread.start()
 
-p = config["apiport"] if "apiport" in config else 1990
+p = config["apiport"] if "apiport" in config else 1991
 apisrv = apiserver.ApiServer(p)
 
 print("Waiting for sensors...")
@@ -315,7 +314,7 @@ while 1:
             payload["tMin"] = T
         if payload["tMax"] < T:
             payload["tMax"] = T
-        
+
         cache[id]["payload"] = payload
 
     cache[id]["ts"] = datetime.now()
