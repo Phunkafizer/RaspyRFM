@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 from re import split
 from raspyrfm import *
@@ -74,7 +74,7 @@ def on_message(client, userdata, msg):
 	if (len(tl) < 2) or (tl[-1] != "set"):
 		return
 	proto = tl[0]
-	tl = tl[1:-1] + [msg.payload]
+	tl = tl[1:-1] + [msg.payload.decode()]
 	print("TX from MQTT: " + proto + " " + str(tl))
 	rctrx.send(proto, tl)
 

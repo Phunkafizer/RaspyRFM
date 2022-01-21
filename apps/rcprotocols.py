@@ -40,10 +40,10 @@ class RcPulse:
 				p2 = 1.0 * symlist[i+1]
 
 		f = (p2-p1) / (p2+p1)
-		
+
 		self._minwidth = self._timebase * (1 - f)
 		self._maxwidth = self._timebase * (1 + f)
-		
+
 	def _reset(self):
 		self.__numbits = 0
 		self._ookdata = bytearray()
@@ -61,7 +61,7 @@ class RcPulse:
 					self._ookdata.append(self.__bbuf)
 					self.__bbuf = 0
 					self.__numbits = 0
-					
+
 	def _add_finish(self):
 		if (self.__numbits > 0):
 			self.__bval ^= 1
@@ -92,7 +92,7 @@ class RcPulse:
 		pos = 0
 		sumpulse = 0
 		sumstep = 0
-		while pos < len(pulsetrain):	
+		while pos < len(pulsetrain):
 			match = None
 			for s in self._symbols:
 				slen = len(self._symbols[s])
@@ -114,15 +114,14 @@ class RcPulse:
 				rep = False
 			self._lastdecodetime = time.time()
 			return dec, int(1.0 * sumpulse / sumstep), rep
-			
+
 		return None, None, None
 
 	def _encode_command(self, command):
-		command = command.lower()
-		if command in self._commands:
-			return self._commands[command]
-		else:
-			raise Exception("Invalid command")
+		for key in self._commands:
+			if key.lower() == command.lower():
+				return self._commands[key]
+		raise Exception("Invalid command '" + str(command) + "'")
 
 	def _decode_command(self, symbols):
 		for k in self._commands:
@@ -265,10 +264,10 @@ class Brennenstuhl(TristateBase):
 			for u in symbols[5:9]:
 				unit += 1
 				if u == '0':
-					break 
+					break
 
 			command = self._decode_command(symbols[10:12].upper())
-			return [dips, unit, command], tb, rep 
+			return [dips, unit, command], tb, rep
 
 class PPM1(RcPulse): #Intertechno, Hama, Nexa, Telldus, ...
 	'''
@@ -886,7 +885,7 @@ class RcTransceiver(threading.Thread):
 					topic = proto._name + topic
 					self.__statecb(topic, msg)
 			except Exception as e:
-				print("Encode error: " + e.message)
+				print("Encode error: " + str(e))
 
 	def run(self):
 		while True:
