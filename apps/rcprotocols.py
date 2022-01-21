@@ -3,6 +3,7 @@ from argparse import ArgumentParser
 from raspyrfm import *
 import threading
 import time
+import json
 
 PARAM_ID = ('i', 'id')
 PARAM_HOUSE = ('o', 'house')
@@ -117,6 +118,7 @@ class RcPulse:
 		return None, None, None
 
 	def _encode_command(self, command):
+		command = command.lower()
 		if command in self._commands:
 			return self._commands[command]
 		else:
@@ -146,6 +148,21 @@ class RcPulse:
 
 	def encode(self, params):
 		pass
+
+	def get_decode_dict(self, decresult):
+		if not hasattr(self, "params"):
+			return None
+		result = {}
+		for i in range(len(decresult)):
+			result[self.params[i][1]] = decresult[i]
+		return result
+
+	def get_mqtt_from_dict(self, li):
+		topic = ""
+		for i in range(len(self.params[:-1])):
+			topic += "/" + str(li[self.params[i][1]])
+		return topic, li[self.params[-1][1]].upper()
+
 
 class TristateBase(RcPulse): #Baseclass for old intertechno, Brennenstuhl, ...
 	def __init__(self):
@@ -191,7 +208,7 @@ class Tristate(TristateBase):
 	def decode(self, pulsetrain):
 		symbols, tb, rep = self._decode_symbols(pulsetrain[0:-2])
 		if symbols:
-			return {"code": symbols}, tb, rep
+			return {"code": symbols}, tb, rep, [], symbols
 
 class ITTristate(TristateBase): #old intertechno
 	def __init__(self):
@@ -203,7 +220,8 @@ class ITTristate(TristateBase): #old intertechno
 
 	def encode(self, params, timebase=None, repetitions=None):
 		symbols = ""
-		symbols += self._encode_int(ord(params["house"][0]) - ord('A'), 4)
+		house = params["house"].upper()[0]
+		symbols += self._encode_int(ord(house) - ord('A'), 4)
 		symbols += self._encode_int(int(params["unit"]) - 1, 2)
 		symbols += self._encode_int(int(params["group"]) - 1, 2)
 		symbols += "0F"
@@ -213,12 +231,11 @@ class ITTristate(TristateBase): #old intertechno
 	def decode(self, pulsetrain):
 		symbols, tb, rep = self._decode_symbols(pulsetrain[0:-2])
 		if symbols:
-			return {
-				"house": chr(self._decode_int(symbols[:4]) + ord('A')),
-				"unit": self._decode_int(symbols[4:6]) + 1,
-				"group": self._decode_int(symbols[6:8]) + 1,
-				"command": self._decode_command(symbols[10:12]),
-			}, tb, rep
+			house = chr(self._decode_int(symbols[:4]) + ord('A'))
+			unit = self._decode_int(symbols[4:6]) + 1
+			group = self._decode_int(symbols[6:8]) + 1
+			command = self._decode_command(symbols[10:12])
+			return [house, group, unit, command], tb, rep
 
 class Brennenstuhl(TristateBase):
 	def __init__(self):
@@ -250,11 +267,8 @@ class Brennenstuhl(TristateBase):
 				if u == '0':
 					break 
 
-			return {
-				"dips": dips,
-				"unit": unit,
-				"command": self._decode_command(symbols[10:12].upper()),
-			}, tb, rep
+			command = self._decode_command(symbols[10:12].upper())
+			return [dips, unit, command], tb, rep 
 
 class PPM1(RcPulse): #Intertechno, Hama, Nexa, Telldus, ...
 	'''
@@ -301,25 +315,24 @@ class Intertechno(PPM1):
 	def decode(self, pulsetrain):
 		symbols, tb, rep = self._decode_symbols(pulsetrain[2:-2])
 		if symbols:
-			return {
-				"id": int(symbols[:26], 2),
-				"unit": self._decode_unit(symbols[28:32]),
-				"command": self._decode_command(symbols[27])
-			}, tb, rep
+			id = int(symbols[:26], 2)
+			unit = self._decode_unit(symbols[28:32])
+			command = self._decode_command(symbols[27])
+			return [id, unit, command], tb, rep
 
 class Hama(Intertechno):
 	def __init__(self):
 		Intertechno.__init__(self)
 		self._name = "hama"
 		self._timebase = 250
-	
+
 	def _encode_unit(self, unit):
 		return "{:04b}".format(16 - int(unit))
 
 	def _decode_unit(self, unit):
 		return 16 - int(unit, 2)
 
-		
+
 class PWM1(RcPulse):
 	'''
 	PWM1: Pulse Width Modulation 24 bit
@@ -331,7 +344,7 @@ class PWM1(RcPulse):
 		self._timebase = 300
 		self._repetitions = 6
 		self._pattern = "[01]{24}"
-		self._symbols = { 
+		self._symbols = {
 			'1': [3, 1],
 			'0': [1, 3],
 		}
@@ -375,11 +388,10 @@ class Logilight(PWM1):
 	def decode(self, pulsetrain):
 		symbols, tb, rep = self._decode_symbols(pulsetrain[:-2])
 		if symbols:
-			return {
-				"id": int(symbols[:20], 2),
-				"unit": self._decode_unit(symbols[21:24]),
-				"command": self._decode_command(symbols[20])
-			}, tb, rep
+			id = int(symbols[:20], 2)
+			unit = self._decode_unit(symbols[21:24])
+			command = self._decode_command(symbols[20])
+			return [id, unit, command], tb, rep
 
 class Emylo(PWM1):
 	def __init__(self):
@@ -397,10 +409,9 @@ class Emylo(PWM1):
 	def decode(self, pulsetrain):
 		symbols, tb, rep = self._decode_symbols(pulsetrain[:-2])
 		if symbols:
-			return {
-				"id": int(symbols[:20], 2),
-				"command": self._decode_command(symbols[-4:])
-			}, tb, rep
+			id = int(symbols[:20], 2)
+			command = self._decode_command(symbols[-4:])
+			return [id, command], tb, rep
 
 class FS20(RcPulse):
 	def __init__(self):
@@ -408,16 +419,16 @@ class FS20(RcPulse):
 		self._timebase = 200
 		self._repetitions = 6
 		self._pattern = "0000000000001[01]{45}"
-		self._symbols = { 
+		self._symbols = {
 			'0': [2, 2],
 			'1': [3, 3],
 		}
 		self._header = [2, 2] * 12 + [3, 3]
 		self._footer = [1, 100]
-		self.params = [PARAM_ID,PARAM_UNIT, PARAM_COMMAND]
+		self.params = [PARAM_ID, PARAM_UNIT, PARAM_COMMAND]
 		self._class = CLASS_RCSWITCH
 		RcPulse.__init__(self)
-		
+
 	def __encode_byte(self, b):
 		b &= 0xFF
 		result = '{:08b}'.format(b)
@@ -440,15 +451,14 @@ class FS20(RcPulse):
 		q = 0x06 + (id >> 8) + (id & 0xFF) + unit + command
 		symbols += self.__encode_byte(q)
 		return self._build_frame(symbols, timebase, repetitions)
-		
+
 	def decode(self, pulsetrain):
 		symbols, tb, rep = self._decode_symbols(pulsetrain[0:-2])
 		if symbols:
-			return {
-				"id": int(symbols[13:21] + symbols[22:30], 2),
-				"unit": int(symbols[31:39], 2) + 1,
-				"command": int(symbols[40:48], 2),
-			}, tb, rep
+			id = int(symbols[13:21] + symbols[22:30], 2)
+			unit = int(symbols[31:39], 2) + 1
+			command = int(symbols[40:48], 2)
+			return [id, unit, command], tb, rep
 
 class Voltcraft(RcPulse):
 	'''
@@ -489,11 +499,10 @@ class Voltcraft(RcPulse):
 	def decode(self, pulsetrain):
 		symbols, tb, rep = self._decode_symbols(pulsetrain[1:-1])
 		if symbols:
-			return {
-				"id": int(symbols[0:12][::-1], 2),
-				"unit": int(symbols[12:14][::-1], 2) + 1,
-				"command": self._decode_command(symbols[14:17])
-			}, tb, rep
+			id = int(symbols[0:12][::-1], 2)
+			unit = int(symbols[12:14][::-1], 2) + 1
+			command = self._decode_command(symbols[14:17])
+			return [id, unit, command], tb, rep, 
 
 class PilotaCasa(RcPulse):
 	'''
@@ -533,6 +542,7 @@ class PilotaCasa(RcPulse):
 	def encode(self, params, timebase=None, repetitions=None):
 		symbols = '01'
 		u = None
+		params["command"] = params["command"].lower()
 		if params["command"] in ["allon", "alloff"]:
 			params["unit"] = -1
 			params["group"] = -1
@@ -544,17 +554,14 @@ class PilotaCasa(RcPulse):
 		symbols += "{:016b}".format(int(params["id"]))[::-1]
 		symbols += "11111111"
 		return self._build_frame(symbols, timebase, repetitions)
-		
+
 	def decode(self, pulsetrain):
 		symbols, tb, rep = self._decode_symbols(pulsetrain[:-2])
 		if symbols and (symbols[2:8] in self.__codes):
 			c = self.__codes[symbols[2:8]]
-			return {
-				"id": int(symbols[8:24][::-1], 2),
-				"group": c[0],
-				"unit": c[1],
-				"command": c[2],
-			}, tb, rep
+			id = int(symbols[8:24][::-1], 2)
+			return [id, c[0], c[1], c[2]], tb, rep
+
 
 class PCPIR(TristateBase): #pilota casa PIR sensor
 	'''
@@ -574,11 +581,10 @@ class PCPIR(TristateBase): #pilota casa PIR sensor
 	def decode(self, pulsetrain):
 		symbols, tb, rep = self._decode_symbols(pulsetrain[0:-2])
 		if symbols:
-			return {
-				"id": self._decode_int(symbols[5:10]),
-				"unit": self._decode_int(symbols[0:5]),
-				"command": self._decode_command(symbols[11:12])
-			}, tb, rep
+			id = self._decode_int(symbols[5:10])
+			unit = self._decode_int(symbols[0:5])
+			command = self._decode_command(symbols[11:12])
+			return [id, unit, command], tb, rep
 
 
 class REVRitterShutter(RcPulse):
@@ -608,9 +614,8 @@ class REVRitterShutter(RcPulse):
 	def decode(self, pulsetrain):
 		symbols, tb, rep = self._decode_symbols(pulsetrain[0:-2])
 		if symbols:
-			return {
-				"id": int(symbols[0:24], 2),
-			}, tb, rep
+			id = int(symbols[0:24], 2)
+			return [id], tb, rep
 
 class WH2(RcPulse):
 	'''
@@ -634,20 +639,39 @@ class WH2(RcPulse):
 		symbols, tb, rep = self._decode_symbols(pulsetrain[0:-2])
 		if symbols:
 			symbols += "0"
-			res = {}
 
-			res["id"] = "{:02x}".format(int(symbols[12:20], 2))
+			id = "{:02x}".format(int(symbols[12:20], 2))
 			T = int(symbols[20:32], 2)
 			if T >= 1<<11:
 				T -= 1<<12
 			T /= 10.0
-			res["T"] = T
-
+			
+			res = [id, T]
 			RH = int(symbols[32:40], 2)
 			if RH != 0xFF:
-				res["RH"] = RH
-			
+				res.append(RH)
+
 			return res, tb, rep
+
+	def get_decode_dict(self, decresult):
+		res = {
+			"id": decresult[0],
+			"T": decresult[1]
+		}
+		if len(decresult) >= 3:
+			res["RH"] = decresult[2]
+
+		return res
+
+	def get_mqtt_from_dict(self, di):
+		topic = "/" + di["id"]
+		msg = {
+			"T": di["T"]
+		}
+		if "RH" in di:
+			msg["RH"] = di["RH"]
+		return topic, json.dumps(msg)
+		
 
 class WS7000(RcPulse):
 	'''
@@ -695,7 +719,7 @@ class WS7000(RcPulse):
 				h = n[5] * 0.1 + n[6] * 1 + n[7] * 10
 				if h > 0:
 					res["RH"] = h
-				return res, tb, rep
+				return res, tb, rep, None, None
 
 protocols = [
 	Tristate(),
@@ -720,7 +744,7 @@ def get_protocol(name):
 			return p
 	return None
 
-RXDATARATE = 20.0 #kbit/s	
+RXDATARATE = 20.0 #kbit/s
 class RfmPulseTRX(threading.Thread):
 	def __init__(self, module, rxcb, frequency):
 		self.__rfm = RaspyRFM(module, RFM69)
@@ -741,7 +765,7 @@ class RfmPulseTRX(threading.Thread):
 		threading.Thread.__init__(self)
 		self.daemon = True
 		self.start()
-		
+
 	def run(self):
 		while True:
 			self.__event.wait()
@@ -749,7 +773,7 @@ class RfmPulseTRX(threading.Thread):
 				Datarate = RXDATARATE #kbit/s
 			)
 			self.__rfm.start_receive(self.__rxcb)
-	
+
 	def __rxcb(self, rfm):
 		bit = False
 		cnt = 1
@@ -800,7 +824,7 @@ class RfmPulseTRX(threading.Thread):
 		self.__rfm.send(train)
 
 class RcTransceiver(threading.Thread):
-	def __init__(self, module, frequency, rxcallback):
+	def __init__(self, module, frequency, rxcallback, statecallback = None):
 		threading.Thread.__init__(self)
 		self.__lock = threading.Lock()
 		self.__event = threading.Event()
@@ -808,11 +832,12 @@ class RcTransceiver(threading.Thread):
 		self.daemon = True
 		self.start()
 		self.__rxcb = rxcallback
+		self.__statecb = statecallback
 		self.__rfmtrx = RfmPulseTRX(module, self.__pushPulseTrain, frequency)
 
 	def __del__(self):
 		del self.__rfmtrx
-	
+
 	def __pushPulseTrain(self, train):
 		self.__lock.acquire()
 		self.__trainbuf.append(list(train))
@@ -824,11 +849,25 @@ class RcTransceiver(threading.Thread):
 		succ = False
 		for p in protocols:
 			try:
-				params, tb, rep = p.decode(train)
-				if params:
+				dec, tb, rep = p.decode(train)
+				if dec:
 					succ = True
 					if not rep:
-						res.append({"protocol": p._name, "class": p._class, "params": params})	
+						decdict = p.get_decode_dict(dec)
+						resitem = {
+							"protocol": p._name,
+							"class": p._class,
+							"params": decdict,
+							#"topic": topic,
+							#"msg": msg
+						}
+						res.append(resitem)
+
+						if self.__statecb:
+							topic, msg = p.get_mqtt_from_dict(decdict)
+							topic = p._name + topic
+							self.__statecb(topic, msg)
+
 			except Exception as e:
 				pass
 
@@ -838,8 +877,14 @@ class RcTransceiver(threading.Thread):
 		proto = get_protocol(protocol)
 		if proto:
 			try:
+				if not type(params) is dict:
+					params = proto.get_decode_dict(params)
 				txdata, tb = proto.encode(params, timebase, repeats)
-				self.__rfmtrx.send(txdata, tb)
+				self.__rfmtrx.send(txdata, tb)	
+				if self.__statecb:
+					topic, msg = proto.get_mqtt_from_dict(params)
+					topic = proto._name + topic
+					self.__statecb(topic, msg)
 			except Exception as e:
 				print("Encode error: " + e.message)
 
