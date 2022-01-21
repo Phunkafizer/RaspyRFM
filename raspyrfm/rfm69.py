@@ -198,7 +198,7 @@ class Rfm69():
 		self.__fifothresh = 32
 		self.__packet_format = PacketFormat_Fixed
 		self.__aes_on = False
-                self.__isrfm69hw = False
+		self.__isrfm69hw = False
 
 		print("RFM69 found on CS " + str(cs), file=sys.stderr)
 		GPIO.setmode(GPIO.BCM)
@@ -268,8 +268,8 @@ class Rfm69():
 
 		for key in config:
 			self.__write_reg(key, config[key])
-                
-                self.__set_highPower()
+
+		self.__set_highPower()
 		self.mode_standby()
 		print("Init complete.", file = sys.stderr)
 
@@ -297,29 +297,29 @@ class Rfm69():
 		dio *= 2
 		self.__set_reg(reg, 0xC0 >> dio, mapping << (6 - dio))
 
-        def __set_highPower(self):
-            #Must be called after initialization for rfm69hw
-            if(self.__isrfm69hw == True):
-                self.__write_reg(RegOcp, 0x0F) # OCP OFF
-                self.__write_reg(RegPaLevel, (self.read_reg(RegPaLevel) & 0x1F) | 0x60) #PA0 OFF PA1 ON  PA2 ON
-            else:
-                self.__write_reg(RegOcp, 0x1A) #OCP ON
-                self.__write_reg(RegPaLevel, (self.read_reg(RegPaLevel) & 0x1F) | 0x80) #PA0 ON  PA1 OFF PA2 OFF
+	def __set_highPower(self):
+		#Must be called after initialization for rfm69hw
+		if(self.__isrfm69hw == True):
+			self.__write_reg(RegOcp, 0x0F) # OCP OFF
+			self.__write_reg(RegPaLevel, (self.read_reg(RegPaLevel) & 0x1F) | 0x60) #PA0 OFF PA1 ON  PA2 ON
+		else:
+			self.__write_reg(RegOcp, 0x1A) #OCP ON
+			self.__write_reg(RegPaLevel, (self.read_reg(RegPaLevel) & 0x1F) | 0x80) #PA0 ON  PA1 OFF PA2 OFF
 
-        def __set_highPowerRegs(self, mode):
-            #Registers only present in rfm69hw
-            if(self.__isrfm69hw):
-                if(mode == MODE_TX):
-                    self.__write_reg(RegTestPa1, 0x5D)
-                    self.__write_reg(RegTestPa2, 0x7C)
-                else:
-                    self.__write_reg(RegTestPa1, 0x55)
-                    self.__write_reg(RegTestPa2, 0x70)
+	def __set_highPowerRegs(self, mode):
+        	#Registers only present in rfm69hw
+		if(self.__isrfm69hw):
+			if(mode == MODE_TX):
+				self.__write_reg(RegTestPa1, 0x5D)
+				self.__write_reg(RegTestPa2, 0x7C)
+			else:
+				self.__write_reg(RegTestPa1, 0x55)
+				self.__write_reg(RegTestPa2, 0x70)
 
 	def __set_mode(self, mode):
 		self.__write_reg(RegOpMode, mode << 2)
 		self.__set_highPowerRegs(mode)
-                self.__mode = mode
+		self.__mode = mode
 		while ((self.read_reg(RegIrqFlags1) & (1<<7)) == 0):
 			pass
 
@@ -357,17 +357,17 @@ class Rfm69():
 
 			elif key == "TxPower":
 				pwr = int(value + 18)
-                                if(self.__isrfm69hw == True):
-                                    self.__write_reg(RegPaLevel, 0x60 | (pwr & 0x1F))
-                                else:
-				    self.__write_reg(RegPaLevel, 0x80 | (pwr & 0x1F))
+				if(self.__isrfm69hw == True):
+					self.__write_reg(RegPaLevel, 0x60 | (pwr & 0x1F))
+				else:
+					self.__write_reg(RegPaLevel, 0x80 | (pwr & 0x1F))
 
-                        elif key == "IsRFM69HW":
-                                self.__isrfm69hw = value
-                                if(value == True):
-                                    self.__write_reg(RegPaLevel, (self.read_reg(RegPaLevel) & 0x1F) | 0x60)
-                                else:
-                                    self.__write_reg(RegPaLevel, (self.read_reg(RegPaLevel) & 0x1F) | 0x80)
+			elif key == "IsRFM69HW":
+				self.__isrfm69hw = value
+				if(value == True):
+					self.__write_reg(RegPaLevel, (self.read_reg(RegPaLevel) & 0x1F) | 0x60)
+				else:
+					self.__write_reg(RegPaLevel, (self.read_reg(RegPaLevel) & 0x1F) | 0x80)
 
 			elif key == "Datarate":
 				rate = int(round(FXOSC / (value * 1000)))
