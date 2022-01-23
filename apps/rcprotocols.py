@@ -149,18 +149,18 @@ class RcPulse:
 		pass
 
 	def get_decode_dict(self, decresult):
-		if not hasattr(self, "params"):
+		if not hasattr(self, "_params"):
 			return None
 		result = {}
 		for i in range(len(decresult)):
-			result[self.params[i][1]] = decresult[i]
+			result[self._params[i][1]] = decresult[i]
 		return result
 
 	def get_mqtt_from_dict(self, li):
 		topic = ""
-		for i in range(len(self.params[:-1])):
-			topic += "/" + str(li[self.params[i][1]])
-		return topic, li[self.params[-1][1]].upper()
+		for i in range(len(self._params[:-1])):
+			topic += "/" + str(li[self._params[i][1]])
+		return topic, li[self._params[-1][1]].upper()
 
 
 class TristateBase(RcPulse): #Baseclass for old intertechno, Brennenstuhl, ...
@@ -199,7 +199,7 @@ class Tristate(TristateBase):
 	def __init__(self):
 		self._name = "tristate"
 		TristateBase.__init__(self)
-		self.params = [PARAM_CODE]
+		self._params = [PARAM_CODE]
 
 	def encode(self, params, timebase=None, repetitions=None):
 		return self._build_frame(params["code"].upper(), timebase, repetitions)
@@ -214,7 +214,7 @@ class ITTristate(TristateBase): #old intertechno
 		self._name = "ittristate"
 		TristateBase.__init__(self)
 		self._pattern = "[0F]{8}0F(FF|F0)"
-		self.params = [PARAM_HOUSE, PARAM_GROUP, PARAM_UNIT, PARAM_COMMAND]
+		self._params = [PARAM_HOUSE, PARAM_GROUP, PARAM_UNIT, PARAM_COMMAND]
 		self._commands = {"on": "FF", "off": "F0"}
 
 	def encode(self, params, timebase=None, repetitions=None):
@@ -241,7 +241,7 @@ class Brennenstuhl(TristateBase):
 		self._name = "brennenstuhl"
 		TristateBase.__init__(self)
 		self._pattern = "[0F]{5}(0FFF|F0FF|FF0F|FFF0)F(0F|F0)"
-		self.params = [PARAM_DIPS, PARAM_UNIT, PARAM_COMMAND]
+		self._params = [PARAM_DIPS, PARAM_UNIT, PARAM_COMMAND]
 		self._commands = {"on": "0F", "off": "F0"}
 
 	def encode(self, params, timebase=None, repetitions=None):
@@ -292,7 +292,7 @@ class PPM1(RcPulse): #Intertechno, Hama, Nexa, Telldus, ...
 class Intertechno(PPM1):
 	def __init__(self):
 		self._name = "intertechno"
-		self.params = [PARAM_ID, PARAM_UNIT, PARAM_COMMAND]
+		self._params = [PARAM_ID, PARAM_UNIT, PARAM_COMMAND]
 		self._commands = {"on": "1", "off": "0"}
 		self._timebase = 275
 		PPM1.__init__(self)
@@ -354,7 +354,7 @@ class PWM1(RcPulse):
 class Logilight(PWM1):
 	def __init__(self):
 		self._name = "logilight"
-		self.params = [PARAM_ID, PARAM_UNIT, PARAM_COMMAND]
+		self._params = [PARAM_ID, PARAM_UNIT, PARAM_COMMAND]
 		self._commands = {"on": "1", "learn": "1", "off": "0"}
 		PWM1.__init__(self)
 
@@ -380,7 +380,7 @@ class Logilight(PWM1):
 		symbols += "{:020b}".format(int(params["id"]))
 		symbols += self._encode_command(params["command"])
 		symbols += self._encode_unit(params["unit"])
-		if (params["command"] == "learn"):
+		if (params["command"].lower() == "learn"):
 			repetitions = 10
 		return self._build_frame(symbols, timebase, repetitions)
 
@@ -395,7 +395,7 @@ class Logilight(PWM1):
 class Emylo(PWM1):
 	def __init__(self):
 		self._name = "emylo"
-		self.params = [PARAM_ID, PARAM_COMMAND]
+		self._params = [PARAM_ID, PARAM_COMMAND]
 		self._commands = {'A': '0001', 'B': '0010', 'C': '0100', 'D': '1000'}
 		PWM1.__init__(self)
 
@@ -424,7 +424,7 @@ class FS20(RcPulse):
 		}
 		self._header = [2, 2] * 12 + [3, 3]
 		self._footer = [1, 100]
-		self.params = [PARAM_ID, PARAM_UNIT, PARAM_COMMAND]
+		self._params = [PARAM_ID, PARAM_UNIT, PARAM_COMMAND]
 		self._class = CLASS_RCSWITCH
 		RcPulse.__init__(self)
 
@@ -476,13 +476,13 @@ class Voltcraft(RcPulse):
 		}
 		self._header = [1]
 		self._footer = [132]
-		self.params = [PARAM_ID, PARAM_UNIT, PARAM_COMMAND]
+		self._params = [PARAM_ID, PARAM_UNIT, PARAM_COMMAND]
 		self._commands = {"off": "000", "alloff": "100", "on": "010", "allon": "110", "dimup": "101", "dimdown": "111"}
 		self._class = CLASS_RCSWITCH
 		RcPulse.__init__(self)
 
 	def encode(self, params, timebase=None, repetitions=None):
-		if params["command"] in ["on", "off"]:
+		if params["command"].lower() in ["on", "off"]:
 			unit = int(params["unit"])-1
 		else:
 			unit = 3
@@ -501,7 +501,7 @@ class Voltcraft(RcPulse):
 			id = int(symbols[0:12][::-1], 2)
 			unit = int(symbols[12:14][::-1], 2) + 1
 			command = self._decode_command(symbols[14:17])
-			return [id, unit, command], tb, rep, 
+			return [id, unit, command], tb, rep
 
 class PilotaCasa(RcPulse):
 	'''
@@ -529,24 +529,27 @@ class PilotaCasa(RcPulse):
 		self._timebase = 550
 		self._repetitions = 5
 		self._pattern = "[01]{32}"
-		self._symbols = { 
+		self._symbols = {
 			'1': [1, 2],
 			'0': [2, 1],
 		}
 		self._footer = [1, 12]
-		self.params = [PARAM_ID, PARAM_GROUP, PARAM_UNIT, PARAM_COMMAND]
+		self._params = [PARAM_ID, PARAM_GROUP, PARAM_UNIT, PARAM_COMMAND]
 		self._class = CLASS_RCSWITCH
 		RcPulse.__init__(self)
 
 	def encode(self, params, timebase=None, repetitions=None):
 		symbols = '01'
 		u = None
-		params["command"] = params["command"].lower()
-		if params["command"] in ["allon", "alloff"]:
+		cmd = params["command"].lower()
+		if cmd == "learn":
+			repetitions = 20
+			cmd = "on"
+		elif cmd in ["allon", "alloff"]:
 			params["unit"] = -1
 			params["group"] = -1
 		for k, v in self.__codes.items():
-			if v[0] == int(params["group"]) and v[1] == int(params["unit"]) and v[2] == params["command"]:
+			if v[0] == int(params["group"]) and v[1] == int(params["unit"]) and v[2] == cmd:
 				u = k
 				break
 		symbols += u
@@ -568,7 +571,7 @@ class PCPIR(TristateBase): #pilota casa PIR sensor
 	'''
 	def __init__(self):
 		self._name = "pcpir"
-		self.params = [PARAM_ID, PARAM_COMMAND]
+		self._params = [PARAM_ID, PARAM_COMMAND]
 		self._timebase = 500
 		self._commands = {"off": "0", "on": "F"}
 		TristateBase.__init__(self)
@@ -602,7 +605,7 @@ class REVRitterShutter(RcPulse):
 			'1': [3, 1],
 		}
 		self._footer = [1, 85]
-		self.params = [PARAM_ID]
+		self._params = [PARAM_ID]
 		self._class = CLASS_RCSWITCH
 		RcPulse.__init__(self)
 
@@ -644,7 +647,7 @@ class WH2(RcPulse):
 			if T >= 1<<11:
 				T -= 1<<12
 			T /= 10.0
-			
+
 			res = [id, T]
 			RH = int(symbols[32:40], 2)
 			if RH != 0xFF:
@@ -670,7 +673,7 @@ class WH2(RcPulse):
 		if "RH" in di:
 			msg["RH"] = di["RH"]
 		return topic, json.dumps(msg)
-		
+
 
 class WS7000(RcPulse):
 	'''
@@ -856,9 +859,7 @@ class RcTransceiver(threading.Thread):
 						resitem = {
 							"protocol": p._name,
 							"class": p._class,
-							"params": decdict,
-							#"topic": topic,
-							#"msg": msg
+							"params": decdict
 						}
 						res.append(resitem)
 
@@ -879,7 +880,7 @@ class RcTransceiver(threading.Thread):
 				if not type(params) is dict:
 					params = proto.get_decode_dict(params)
 				txdata, tb = proto.encode(params, timebase, repeats)
-				self.__rfmtrx.send(txdata, tb)	
+				self.__rfmtrx.send(txdata, tb)
 				if self.__statecb:
 					topic, msg = proto.get_mqtt_from_dict(params)
 					topic = proto._name + topic
