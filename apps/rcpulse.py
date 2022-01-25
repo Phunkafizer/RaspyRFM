@@ -33,21 +33,15 @@ if args.protocol:
 	proto = rcprotocols.get_protocol(args.protocol)
 	if proto:
 		parser2 = ArgumentParser()
-		for param in proto.params:
+		for param in proto._params:
 			parser2.add_argument("-" + param[0], "--" + param[1], required=True)
 		params = parser2.parse_args(remainargs)
-		rctrx.send(args.protocol, params.__dict__, args.timebase, args.repeats)	
+		rctrx.send(args.protocol, params.__dict__, args.timebase, args.repeats)
 	else:
 		print("Unknown protocol.")
 	del rctrx
 	exit()
 
-state = "on"
-while True:
-	time.sleep(15)
-	
-	#rctrx.send("ittristate", {"house": "A", "group": 1, "unit": 1, "command": state})
-	if (state == "on"):
-		state = "off"
-	else:
-		state = "on"
+print("Listening...")
+while (1):
+	time.sleep(1)
