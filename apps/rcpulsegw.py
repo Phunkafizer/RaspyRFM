@@ -10,6 +10,7 @@ import time
 import os
 
 MQTT_BASE_TOPIC = "home/rcpulse"
+RETAIN = False
 
 try:
     import paho.mqtt.client as mqtt
@@ -45,7 +46,7 @@ def rccb(dec, train):
 def statecb(topic, msg):
 	if mqttClient:
 		topic = MQTT_BASE_TOPIC + "/" + topic
-		mqttClient.publish(topic, msg)
+		mqttClient.publish(topic, msg, 0, RETAIN)
 		print("STATE CB", topic, msg)
 
 if not raspyrfm_test(args.module, RFM69):
