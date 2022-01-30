@@ -169,7 +169,7 @@ class TristateBase(RcPulse): #Baseclass for old intertechno, Brennenstuhl, ...
 			self._timebase = 300
 		self._repetitions = 4
 		self._pattern = "[01F]{12}"
-		self._symbols = { 
+		self._symbols = {
 			'0': [1, 3, 1, 3],
 			'1': [3, 1, 3, 1],
 			'F': [1, 3, 3, 1],
@@ -284,6 +284,7 @@ class PPM1(RcPulse): #Intertechno, Hama, Nexa, Telldus, ...
 		self._symbols = {
 			'0': [1, 1, 1, 5],
 			'1': [1, 5, 1, 1],
+			'X': [1, 1, 1, 1]
 		}
 		self._footer = [1, 39]
 		self._class = CLASS_RCSWITCH
@@ -303,12 +304,26 @@ class Intertechno(PPM1):
 	def _decode_unit(self, unit):
 		return int(unit, 2) + 1
 
+	def _encode_dim(self, dim):
+		dim = int(round(15*dim/100.0))
+		if dim > 15:
+			dim = 15
+		return "{:04b}".format(dim)
+
 	def encode(self, params, timebase=None, repetitions=None):
 		symbols = ""
 		symbols += "{:026b}".format(int(params["id"]))
 		symbols += "0" #group
-		symbols += self._encode_command(params["command"])
+		dim = None
+		try:
+			dim = int(params["command"])
+			symbols += "X"
+		except:
+			symbols += self._encode_command(params["command"])
 		symbols += self._encode_unit(params["unit"])
+		if dim >= 0:
+			symbols += self._encode_dim(dim)
+		print (symbols)
 		return self._build_frame(symbols, timebase, repetitions)
 
 	def decode(self, pulsetrain):
