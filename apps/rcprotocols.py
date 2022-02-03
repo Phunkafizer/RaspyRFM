@@ -283,8 +283,7 @@ class PPM1(RcPulse): #Intertechno, Hama, Nexa, Telldus, ...
 		self._header = [1, 11]
 		self._symbols = {
 			'0': [1, 1, 1, 5],
-			'1': [1, 5, 1, 1],
-			'X': [1, 1, 1, 1]
+			'1': [1, 5, 1, 1]
 		}
 		self._footer = [1, 39]
 		self._class = CLASS_RCSWITCH
@@ -297,6 +296,8 @@ class Intertechno(PPM1):
 		self._commands = {"on": "1", "off": "0"}
 		self._timebase = 275
 		PPM1.__init__(self)
+		self._symbols['X'] = [1, 1, 1, 1] #tristate symbol for dimmer
+		self._pattern = "([01]{32})|([01]{27}X[01]{8})"
 
 	def _encode_unit(self, unit):
 		return "{:04b}".format(int(unit) - 1)
@@ -321,9 +322,8 @@ class Intertechno(PPM1):
 		except:
 			symbols += self._encode_command(params["command"])
 		symbols += self._encode_unit(params["unit"])
-		if dim >= 0:
+		if dim:
 			symbols += self._encode_dim(dim)
-		print (symbols)
 		return self._build_frame(symbols, timebase, repetitions)
 
 	def decode(self, pulsetrain):
@@ -331,7 +331,10 @@ class Intertechno(PPM1):
 		if symbols:
 			id = int(symbols[:26], 2)
 			unit = self._decode_unit(symbols[28:32])
-			command = self._decode_command(symbols[27])
+			if symbols[27] == 'X': #dimmer command
+				command = int(round(int(symbols[32:36], 2) * 100 / 15.0))
+			else:
+				command = self._decode_command(symbols[27])
 			return [id, unit, command], tb, rep
 
 class Hama(Intertechno):
