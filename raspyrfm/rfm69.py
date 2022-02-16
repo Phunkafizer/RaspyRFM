@@ -1,9 +1,7 @@
 from __future__ import print_function
-import sys
+from . import rfmbase
+import spidev, sys, threading, time
 import RPi.GPIO as GPIO
-import spidev
-import threading
-import time
 
 FXOSC = 32E6
 FSTEP = FXOSC / (1<<19)
@@ -161,37 +159,15 @@ DIO0_PM_PLLLOCK = 3
 PacketFormat_Fixed = 0
 PacketFormat_Variable = 1
 
-class Rfm69():
-	@staticmethod
-	def test(cs, gpio_dio0):
-		spi = spidev.SpiDev()
-		spi.open(0, cs)
-		spi.max_speed_hz = 5000
-		#Testing presence of module
-		err = False
-		for i in range(8):
-			spi.xfer3([(RegSyncValue1 + i) | 0x80, 0x55])
-			test = spi.xfer3([(RegSyncValue1 + i), 0x00])[1]
-			if test != 0x55:
-				err = True
-				break
-			temp = spi.xfer3([(RegSyncValue1 + i) | 0x80, 0xAA])
-			test = spi.xfer3([(RegSyncValue1 + i), 0x00])[1]
-			if test != 0xAA:
-				err = True
-				break
-		spi.close()
-		return not err
-
+class Rfm69(rfmbase.RfmBase):
 	def __init__(self, cs = 0, gpio_int = 25):
-		if not self.test(cs, gpio_int):
+		if not rfmbase.RfmBase.test(cs, 0x24):
 			print("ERROR! RFM69 not found", file=sys.stderr)
 			return
 
+		rfmbase.RfmBase.__init__(self, cs)
+
 		self.__event = threading.Event()
-		self.__spi = spidev.SpiDev()
-		self.__spi.open(0, cs)
-		self.__spi.max_speed_hz=int(2E6)
 		self.__gpio_int = gpio_int
 		self.__mutex = threading.Lock()
 		self.__syncsize = 4
@@ -267,7 +243,7 @@ class Rfm69():
 		config[RegPacketConfig1] = 0x00 #Fixed length, CRC off, no adr
 
 		for key in config:
-			self.__write_reg(key, config[key])
+			self._write_reg(key, config[key])
 
 		self.__set_highPower()
 		self.mode_standby()
@@ -276,18 +252,6 @@ class Rfm69():
 	def __rfm_irq(self, ch):
 		self.__event.set()
 
-	def __write_reg(self, reg, val):
-		temp = self.__spi.xfer3([(reg & 0x7F) | 0x80, int(val & 0xFF)])
-
-	def __write_reg_word(self, reg, val):
-		self.__write_reg(reg, (val >> 8) & 0xFF)
-		self.__write_reg(reg + 1, val & 0xFF)
-
-	def __set_reg(self, reg, mask, val):
-		temp = self.read_reg(reg) & (~mask)
-		temp |= val & mask
-		self.__write_reg(reg, temp)
-
 	def __set_dio_mapping(self, dio, mapping):
 		if dio > 3:
 			reg = RegDioMapping2
@@ -295,48 +259,33 @@ class Rfm69():
 		else:
 			reg = RegDioMapping1
 		dio *= 2
-		self.__set_reg(reg, 0xC0 >> dio, mapping << (6 - dio))
+		self._set_reg(reg, 0xC0 >> dio, mapping << (6 - dio))
 
 	def __set_highPower(self):
 		#Must be called after initialization for rfm69hw
 		if(self.__isrfm69hw == True):
-			self.__write_reg(RegOcp, 0x0F) # OCP OFF
-			self.__write_reg(RegPaLevel, (self.read_reg(RegPaLevel) & 0x1F) | 0x60) #PA0 OFF PA1 ON  PA2 ON
+			self._write_reg(RegOcp, 0x0F) # OCP OFF
+			self._write_reg(RegPaLevel, (self.read_reg(RegPaLevel) & 0x1F) | 0x60) #PA0 OFF PA1 ON  PA2 ON
 		else:
-			self.__write_reg(RegOcp, 0x1A) #OCP ON
-			self.__write_reg(RegPaLevel, (self.read_reg(RegPaLevel) & 0x1F) | 0x80) #PA0 ON  PA1 OFF PA2 OFF
+			self._write_reg(RegOcp, 0x1A) #OCP ON
+			self._write_reg(RegPaLevel, (self.read_reg(RegPaLevel) & 0x1F) | 0x80) #PA0 ON  PA1 OFF PA2 OFF
 
 	def __set_highPowerRegs(self, mode):
         	#Registers only present in rfm69hw
 		if(self.__isrfm69hw):
 			if(mode == MODE_TX):
-				self.__write_reg(RegTestPa1, 0x5D)
-				self.__write_reg(RegTestPa2, 0x7C)
+				self._write_reg(RegTestPa1, 0x5D)
+				self._write_reg(RegTestPa2, 0x7C)
 			else:
-				self.__write_reg(RegTestPa1, 0x55)
-				self.__write_reg(RegTestPa2, 0x70)
+				self._write_reg(RegTestPa1, 0x55)
+				self._write_reg(RegTestPa2, 0x70)
 
 	def __set_mode(self, mode):
-		self.__write_reg(RegOpMode, mode << 2)
+		self._write_reg(RegOpMode, mode << 2)
 		self.__set_highPowerRegs(mode)
 		self.__mode = mode
 		while ((self.read_reg(RegIrqFlags1) & (1<<7)) == 0):
 			pass
-
-	def read_reg(self, reg):
-		temp = self.__spi.xfer3([reg & 0x7F, 0x00])
-		return int(temp[1])
-
-	def read_fifo_burst(self, len):
-		temp = self.__spi.xfer3([0x00] + [0x00] * len)
-		return temp[1:]
-
-	def write_fifo_burst(self, data):
-		self.__spi.xfer3([0x80] + list(data))
-
-	def read_reg_word(self, reg):
-		temp = self.__spi.xfer3([reg & 0x7F, 0x00, 0x00])
-		return (temp[1] << 8) | (temp[2])
 
 	def read_rssi_value(self):
 		return self.read_reg(RegRssiValue)
@@ -351,37 +300,37 @@ class Rfm69():
 			value = params[key]
 			if key == "Freq":
 				fword = int(round(value * 1E6 / FSTEP))
-				self.__write_reg(RegFrfMsb, fword >> 16)
-				self.__write_reg(RegFrfMid, fword >> 8)
-				self.__write_reg(RegFrfLsb, fword)
+				self._write_reg(RegFrfMsb, fword >> 16)
+				self._write_reg(RegFrfMid, fword >> 8)
+				self._write_reg(RegFrfLsb, fword)
 
 			elif key == "TxPower":
 				pwr = int(value + 18)
 				if(self.__isrfm69hw == True):
-					self.__write_reg(RegPaLevel, 0x60 | (pwr & 0x1F))
+					self._write_reg(RegPaLevel, 0x60 | (pwr & 0x1F))
 				else:
-					self.__write_reg(RegPaLevel, 0x80 | (pwr & 0x1F))
+					self._write_reg(RegPaLevel, 0x80 | (pwr & 0x1F))
 
 			elif key == "IsRFM69HW":
 				self.__isrfm69hw = value
 				if(value == True):
-					self.__write_reg(RegPaLevel, (self.read_reg(RegPaLevel) & 0x1F) | 0x60)
+					self._write_reg(RegPaLevel, (self.read_reg(RegPaLevel) & 0x1F) | 0x60)
 				else:
-					self.__write_reg(RegPaLevel, (self.read_reg(RegPaLevel) & 0x1F) | 0x80)
+					self._write_reg(RegPaLevel, (self.read_reg(RegPaLevel) & 0x1F) | 0x80)
 
 			elif key == "Datarate":
 				rate = int(round(FXOSC / (value * 1000)))
-				self.__write_reg_word(RegBitrateMsb, rate)
+				self._write_reg_word(RegBitrateMsb, rate)
 
 			elif key == "Deviation":
 				dev = int(round(value * 1000 / FSTEP))
-				self.__write_reg_word(RegFdevMsb, dev)
+				self._write_reg_word(RegFdevMsb, dev)
 
 			elif key == "ModulationType":
-				self.__set_reg(RegDataModul, 0x18, value << 3)
+				self._set_reg(RegDataModul, 0x18, value << 3)
 
 			elif key == "ModulationShaping":
-				self.__set_reg(RegDataModul, 0x03, value)
+				self._set_reg(RegDataModul, 0x03, value)
 
 			elif key == "SyncPattern":
 				conf = 0
@@ -391,19 +340,19 @@ class Rfm69():
 					conf |= 1<<7
 				else:
 					conf = 1<<6
-				self.__write_reg(RegSyncConfig,	 conf)
+				self._write_reg(RegSyncConfig,	 conf)
 				for i, d in enumerate(value):
-					self.__write_reg(RegSyncValue1 + i, d)
+					self._write_reg(RegSyncValue1 + i, d)
 					
 			elif key == "AesKey":
 				if (len(value)) > 0:
-					self.__set_reg(RegPacketConfig2, 1<<0, 1<<0) #AES on
+					self._set_reg(RegPacketConfig2, 1<<0, 1<<0) #AES on
 					self.__aes_on = True
 				else:
-					self.__set_reg(RegPacketConfig2, 1<<0, 0<<0) #AES off
+					self._set_reg(RegPacketConfig2, 1<<0, 0<<0) #AES off
 					self.__aes_on = False
 				for i, d in enumerate(value):
-					self.__write_reg(RegAesKey1 + i, d)
+					self._write_reg(RegAesKey1 + i, d)
 
 			elif key == "Bandwidth":
 				RxBw = FXOSC / value / 1000 / 4
@@ -414,7 +363,7 @@ class Rfm69():
 				RxBw = RxBw / 4 - 4
 				RxBw = max(RxBw, 0)
 				m = int(RxBw)
-				self.__set_reg(RegRxBw, 0x1F, m<<3 | e)
+				self._set_reg(RegRxBw, 0x1F, m<<3 | e)
 
 			elif key == "AfcBandwidth":
 				RxBw = FXOSC / value / 1000 / 4
@@ -425,41 +374,41 @@ class Rfm69():
 				RxBw = RxBw / 4 - 4
 				RxBw = max(RxBw, 0)
 				m = int(RxBw)
-				self.__set_reg(RegAfcBw, 0x1F, m<<3 | e)
+				self._set_reg(RegAfcBw, 0x1F, m<<3 | e)
 
 			elif key == "Preamble":
-				self.__write_reg_word(RegPreambleMsb, value)
+				self._write_reg_word(RegPreambleMsb, value)
 
 			elif key == "LnaGain":
-				self.__set_reg(RegLna, 0x07, value)
+				self._set_reg(RegLna, 0x07, value)
 
 			elif key == "RssiThresh":
 				th = -(value * 2)
-				self.__write_reg(RegRssiThresh, th)
+				self._write_reg(RegRssiThresh, th)
 
 			elif key == "Dagc":
-				self.__write_reg(RegDagc, value)
+				self._write_reg(RegDagc, value)
 
 			elif key == "AfcFei":
-				self.__write_reg(RegAfcFei, value)
+				self._write_reg(RegAfcFei, value)
 
 			elif key == "Callback":
 				self.__callback = value
 
 			elif key == "DcFree":
-				self.__set_reg(RegPacketConfig1, 3<<5, value<<5)
+				self._set_reg(RegPacketConfig1, 3<<5, value<<5)
 
 			elif key == "OokThreshType":
-				self.__set_reg(RegOokPeak, 3<<6, value<<6)
+				self._set_reg(RegOokPeak, 3<<6, value<<6)
 
 			elif key == "OokFixedThresh":
-				self.__write_reg(RegOokFix, value)
+				self._write_reg(RegOokFix, value)
 
 			elif key == "OokPeakThreshDec":
-				self.__set_reg(RegOokPeak, 7<<0, value)
+				self._set_reg(RegOokPeak, 7<<0, value)
 
 			elif key == "PacketFormat":
-				self.__set_reg(RegPacketConfig1, 1<<7, value<<7)
+				self._set_reg(RegPacketConfig1, 1<<7, value<<7)
 				self.__packet_format = value
 
 			else:
@@ -509,8 +458,8 @@ class Rfm69():
 		if self.__packet_format == PacketFormat_Variable:
 			data.insert(0, len(data))
 		else:
-			self.__write_reg(RegPayloadLength, 0 if len(data) > 255 else len(data))
-		self.__write_reg(RegFifoThresh, 0x80 | self.__fifothresh) #start TX with 1st byte in FIFO
+			self._write_reg(RegPayloadLength, 0 if len(data) > 255 else len(data))
+		self._write_reg(RegFifoThresh, 0x80 | self.__fifothresh) #start TX with 1st byte in FIFO
 		self.__set_dio_mapping(0, DIO0_PM_SENT) #DIO0 -> PacketSent
 		self.__set_mode(MODE_TX)
 
@@ -552,13 +501,13 @@ class Rfm69():
 		ookthresh = self.read_reg(RegOokFix)
 		sync = self.read_reg(RegSyncConfig)
 
-		self.__write_reg(RegRssiThresh, 240)
-		self.__write_reg(RegSyncConfig, 1<<6) #no sync, always fill FIFO
-		self.__write_reg(RegPayloadLength, 0) #unlimited length
+		self._write_reg(RegRssiThresh, 240)
+		self._write_reg(RegSyncConfig, 1<<6) #no sync, always fill FIFO
+		self._write_reg(RegPayloadLength, 0) #unlimited length
 		self.__set_mode(MODE_RX)
 		thresh = 40
 		while True:
-			self.__write_reg(RegOokFix, thresh)
+			self._write_reg(RegOokFix, thresh)
 			for i in range(150):
 				b = self.read_fifo_wait()
 				if b != 0:
@@ -568,9 +517,9 @@ class Rfm69():
 				break
 
 		#restore registers
-		self.__write_reg(RegRssiThresh, rssithresh)
-		self.__write_reg(RegOokFix, ookthresh)
-		self.__write_reg(RegSyncConfig, sync)
+		self._write_reg(RegRssiThresh, rssithresh)
+		self._write_reg(RegOokFix, ookthresh)
+		self._write_reg(RegSyncConfig, sync)
 		self.mode_standby()
 		self.__mutex.release()
 		return thresh
@@ -578,8 +527,8 @@ class Rfm69():
 	def __start_rx(self, length):
 		self.__mutex.acquire()
 		while True:
-			self.__write_reg(RegPayloadLength, length)
-			self.__write_reg(RegFifoThresh, self.__fifothresh)
+			self._write_reg(RegPayloadLength, length)
+			self._write_reg(RegFifoThresh, self.__fifothresh)
 			if self.__syncsize > 0:
 				self.__set_dio_mapping(0, DIO0_PM_SYNC) #DIO0 -> SyncAddress
 			else:

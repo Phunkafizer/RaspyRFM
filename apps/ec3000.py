@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 
 from raspyrfm import *
-import sys
-import time
+import sys, time, argparse
 
 try:
 	from influxdb import InfluxDBClient
@@ -13,13 +12,18 @@ except:
 	influxClient = None
 	print("influx init error")
 
-if raspyrfm_test(2, RFM69):
-	print("Found RaspyRFM twin")
-	rfm = RaspyRFM(2, RFM69) #when using the RaspyRFM twin
-elif raspyrfm_test(1, RFM69):
-	print("Found RaspyRFM single")
-	rfm = RaspyRFM(1, RFM69) #when using a single single 868 MHz RaspyRFM
+parser = argparse.ArgumentParser()
+parser.add_argument("-m", "--module", type=int, metavar="1-4", help=u"RaspyRFM module 1-4", default=0)
+args = parser.parse_args()
+
+if args.module > 0:
+	rfm = RaspyRFM(args.module, RFM69)
 else:
+	rfm = RaspyRFM(2, RFM69) # first try module #2
+	if rfm == None:
+		rfm = RaspyRFM(1, RFM69) # then try module #1
+
+if rfm == None:
 	print("No RFM69 module found!")
 	exit()
 

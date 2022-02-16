@@ -1,16 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import raspyrfm
+import sys, time, threading, math, json, os, argparse
+from raspyrfm import *
 import sensors
-import sys
-import time
-import threading
-import math
-import json
 from datetime import datetime
 import apiserver
-import os
 
 try:
     #python2.7
@@ -29,15 +24,20 @@ script_dir = os.path.dirname(__file__)
 with open(script_dir + "/lacrossegw.conf") as jfile:
     config = json.load(jfile)
 
-if raspyrfm.raspyrfm_test(2, raspyrfm.RFM69):
-    print("Found RaspyRFM twin")
-    rfm = raspyrfm.RaspyRFM(2, raspyrfm.RFM69) #when using the RaspyRFM twin
-elif raspyrfm.raspyrfm_test(1, raspyrfm.RFM69):
-    print("Found RaspyRFM single")
-    rfm = raspyrfm.RaspyRFM(1, raspyrfm.RFM69) #when using a single single 868 MHz RaspyRFM
+parser = argparse.ArgumentParser()
+parser.add_argument("-m", "--module", type=int, metavar="1-4", help=u"RaspyRFM module 1-4", default=0)
+args = parser.parse_args()
+
+if args.module > 0:
+	rfm = RaspyRFM(args.module, RFM69)
 else:
-    print("No RFM69 module found!")
-    exit()
+	rfm = RaspyRFM(2, RFM69) # first try module #2
+	if rfm == None:
+		rfm = RaspyRFM(1, RFM69) # then try module #1
+
+if rfm == None:
+	print("No RFM69 module found!")
+	exit()
 
 try:
     from influxdb import InfluxDBClient
@@ -80,7 +80,7 @@ except:
 rfm.set_params(
     Freq = 868.300, #MHz center frequency
     Datarate = 9.579, #kbit/s baudrate
-    ModulationType = raspyrfm.rfm69.FSK, #modulation
+    ModulationType = rfm69.FSK, #modulation
     SyncPattern = [0x2d, 0xd4], #syncword
     Bandwidth = 100, #kHz bandwidth
     RssiThresh = -100, #-100 dB RSSI threshold
@@ -329,7 +329,7 @@ while 1:
     line += "init: " + ("true   " if payload["init"] else "false  ")
 
     print('------------------------------------------------------------------------------')
-    print(line).encode("utf-8")
+    print(line)
     lock.release()
 
     try:

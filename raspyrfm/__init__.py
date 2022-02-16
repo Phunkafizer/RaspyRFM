@@ -1,7 +1,8 @@
+from . import rfmbase
 from . import rfm69
 
 RFM69 = 1
-RFM9x = 2
+RFM95_96 = 2
 
 def __get_hw_params(mod):
 	if mod == 1:
@@ -34,6 +35,9 @@ def RaspyRFM(mod, type):
 		Rfm69 or Rfm9x object if successful, otherwise None
 
 	"""
+	if not raspyrfm_test(mod, type):
+		return None
+
 	s = __get_hw_params(mod)
 
 	if s:
@@ -42,7 +46,21 @@ def RaspyRFM(mod, type):
 		else:
 			print("Not yet implemented.")
 
+	return None
+
 def raspyrfm_test(mod, type):
-	s = __get_hw_params(mod)
-	if s:
-		return rfm69.Rfm69.test(s[0], s[1])
+	if mod < 1:
+		return False
+
+	d = rfmbase.RfmBase.scan()
+	if len(d) < mod:
+		return False
+
+	v = d[mod - 1]
+	if (type == RFM69) and (v == 0x24):
+		return True
+
+	if (type == RFM95_96) and (v == 0x12):
+		return True
+
+	return False

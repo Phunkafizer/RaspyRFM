@@ -1,14 +1,10 @@
 #!/usr/bin/env python
 
+import sys, time, wave, struct, threading, argparse
 from raspyrfm import *
-import sys
-import time
-from argparse import ArgumentParser
-import wave, struct
-import threading
 import rcprotocols
 
-parser = ArgumentParser()
+parser = argparse.ArgumentParser()
 parser.add_argument("-t", "--timebase", type=int, help=u"timebase in \u03bcs")
 parser.add_argument("-r", "--repeats", type=int, help=u"number of repetitions")
 parser.add_argument("-m", "--module", type=int, metavar="1-4", help=u"RaspyRFM module 1-4", default=1)
