@@ -160,7 +160,10 @@ class RcPulse:
 		topic = ""
 		for i in range(len(self._params[:-1])):
 			topic += "/" + str(li[self._params[i][1]])
-		return topic, li[self._params[-1][1]].upper()
+		pay = li[self._params[-1][1]]
+		if type(pay) is str:
+			pay = pay.upper()
+		return topic, pay
 
 
 class TristateBase(RcPulse): #Baseclass for old intertechno, Brennenstuhl, ...

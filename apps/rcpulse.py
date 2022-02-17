@@ -28,7 +28,7 @@ rctrx = rcprotocols.RcTransceiver(args.module, args.frequency, rxcb)
 if args.protocol:
 	proto = rcprotocols.get_protocol(args.protocol)
 	if proto:
-		parser2 = ArgumentParser()
+		parser2 = argparse.ArgumentParser()
 		for param in proto._params:
 			parser2.add_argument("-" + param[0], "--" + param[1], required=True)
 		params = parser2.parse_args(remainargs)
