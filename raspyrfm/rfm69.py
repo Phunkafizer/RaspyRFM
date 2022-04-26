@@ -461,9 +461,11 @@ class Rfm69(rfmbase.RfmBase):
 			self._write_reg(RegPayloadLength, 0 if len(data) > 255 else len(data))
 		self._write_reg(RegFifoThresh, 0x80 | self.__fifothresh) #start TX with 1st byte in FIFO
 		self.__set_dio_mapping(0, DIO0_PM_SENT) #DIO0 -> PacketSent
-		self.__set_mode(MODE_TX)
 
 		l = min(len(data), 64)
+		if not self.__aes_on:
+			self.__set_mode(MODE_TX)
+
 		while True:
 			self.write_fifo_burst(data[:l])
 			data = data[l:]
@@ -477,6 +479,8 @@ class Rfm69(rfmbase.RfmBase):
 				if (status & (1<<7)) == 0: #space for at least 1 bytearray
 					l = 1
 					break
+		if self.__aes_on:
+			self.__set_mode(MODE_TX)
 
 		self.__wait_int()
 		self.mode_standby()
