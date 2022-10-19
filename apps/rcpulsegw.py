@@ -23,7 +23,7 @@ parser.add_argument("-m", "--module", type=int, metavar="1-4", help=u"RaspyRFM m
 parser.add_argument("-f", "--frequency", type=float, help=u"frequency in MHz", default=433.92)
 args = parser.parse_args()
 
-script_dir = os.path.dirname(__file__)
+script_dir = os.path.dirname(os.path.realpath(__file__))
 with open(script_dir + "/rcpulsegw.conf") as jfile:
 	config = json.load(jfile)
 
@@ -52,7 +52,8 @@ if not raspyrfm_test(args.module, RFM69):
 	print("Error! RaspyRFM not found")
 	exit()
 
-rctrx = rcprotocols.RcTransceiver(args.module, args.frequency, rccb, statecb)
+cb = rccb
+rctrx = rcprotocols.RcTransceiver(args.module, args.frequency, cb, statecb)
 
 def apicb(data):
 	print("TX from API: " + str(data))

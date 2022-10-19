@@ -886,19 +886,21 @@ class RfmPulseTRX(threading.Thread):
 			Freq = frequency, #MHz
 			Bandwidth = 500, #kHz
 			SyncPattern = [],
-			RssiThresh = -105, #dBm
+			RssiThresh = -70, #dBm
 			ModulationType = rfm69.OOK,
 			OokThreshType = 1, #peak thresh
 			OokPeakThreshDec = 3,
 			Preamble = 0,
 			TxPower = 13
 		)
-		self.__rxtraincb = rxcb
 		self.__event = threading.Event()
 		self.__event.set()
-		threading.Thread.__init__(self)
-		self.daemon = True
-		self.start()
+
+		if rxcb is not None:
+			self.__rxtraincb = rxcb
+			threading.Thread.__init__(self)
+			self.daemon = True
+			self.start()
 
 	def run(self):
 		while True:
@@ -906,15 +908,21 @@ class RfmPulseTRX(threading.Thread):
 			self.__rfm.set_params(
 				Datarate = RXDATARATE #kbit/s
 			)
+			print("Start Receive")
 			self.__rfm.start_receive(self.__rxcb)
+			print("Receive Done")
 
 	def __rxcb(self, rfm):
 		bit = False
 		cnt = 1
 		train = []
 		bitfifo = 0
+		train *= 0
+		buf = []
+		print("RXCB enter")
 		while self.__event.isSet():
 			fifo = rfm.read_fifo_wait(64)
+			buf += fifo
 
 			for b in fifo:
 				mask = 0x80
@@ -931,9 +939,12 @@ class RfmPulseTRX(threading.Thread):
 						v &= v - 1
 						c += 1
 					'''
-
+					'''
 					if newbit == bit:
 						cnt += 1
+						if cnt > 10000:
+							print("RX FLAT")
+							return
 					else:
 						if cnt < 150*RXDATARATE/1000: #<150 us
 							train *= 0 #clear
@@ -947,6 +958,21 @@ class RfmPulseTRX(threading.Thread):
 							train.append(cnt)
 						cnt = 1
 						bit = not bit
+					'''
+					if newbit == bit:
+						cnt += 1
+					else:
+						train.append(cnt)
+						cnt = 1
+
+					if cnt > 10000:
+						s = ""
+						for b in buf:
+							s += f'{b:08b}'
+						print("RX end")
+						print(s)
+						return
+
 					mask >>= 1
 
 	def send(self, train, timebase):
@@ -964,10 +990,12 @@ class RcTransceiver(threading.Thread):
 		self.__event = threading.Event()
 		self.__trainbuf = []
 		self.daemon = True
-		self.start()
+		cb = None if rxcallback is None else self.__pushPulseTrain
+		if cb is not None:
+			self.start()
 		self.__rxcb = rxcallback
 		self.__statecb = statecallback
-		self.__rfmtrx = RfmPulseTRX(module, self.__pushPulseTrain, frequency)
+		self.__rfmtrx = RfmPulseTRX(module, cb, frequency)
 
 	def __del__(self):
 		del self.__rfmtrx
@@ -1023,6 +1051,7 @@ class RcTransceiver(threading.Thread):
 	def run(self):
 		while True:
 			self.__event.wait()
+			print("event fired")
 			self.__lock.acquire()
 			train = None
 			if len(self.__trainbuf) > 0:
