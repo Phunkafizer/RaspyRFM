@@ -742,7 +742,69 @@ class WS7000(RcPulse):
 				h = n[5] * 0.1 + n[6] * 1 + n[7] * 10
 				if h > 0:
 					res["RH"] = h
-				return res, tb, rep, None, None
+				return res, tb, rep
+
+class TX141TH(RcPulse):
+	'''
+	Temperature & humidity sensor LaCrosse TX141TH / TFA Dostmann 30.3221.02
+	Pulse Width Modulation
+	Short = 1, long = 2
+	'''
+	def __init__(self):
+		self._name = "TX141TH"
+		self._class = CLASS_RCWEATHER
+		self._timebase = 250
+		self._pattern = "^[01]{40}$"
+		self._symbols = {
+			'0': [1, 2],
+			'1': [2, 1]
+		}
+		RcPulse.__init__(self)
+
+	def check_crc(self, symbols):
+		a = []
+		sum = 0
+		key = 0xf4
+		for i in range(0, 32, 8):
+			b = int(symbols[24-i:32-i], 2)
+			for j in range(8):
+				if ((b >> j) & 1) != 0:
+					sum ^= key
+				
+				if (key & 0x80) != 0:
+					key = (key << 1) ^ 0x31
+				else:
+					key = key << 1
+
+		return (sum & 0xff) == int(symbols[32:40], 2)
+
+	def decode(self, pulsetrain):
+		symbols, tb, rep = self._decode_symbols(pulsetrain[8:88])
+		if symbols:
+			if self.check_crc(symbols):
+				res = {}
+				id = int(symbols[0:8], 2)
+				ch = int(symbols[10:12], 2) + 1
+				T = (int(symbols[12:24], 2) - 500) / 10
+				RH = int(symbols[24:32], 2)
+				return [id, ch, T, RH], tb, rep
+
+	def get_decode_dict(self, decresult):
+		res = {
+			"id": decresult[0],
+			"ch": decresult[1],
+			"T": decresult[2],
+			"RH": decresult[3]
+		}
+		return res
+
+	def get_mqtt_from_dict(self, di):
+		topic = "/" + str(di["id"]) + "/" + str(di["ch"])
+		msg = {
+			"T": di["T"],
+			"RH": di["RH"]
+		}
+		return topic, json.dumps(msg)
 
 protocols = [
 	Tristate(),
@@ -759,6 +821,7 @@ protocols = [
 	REVRitterShutter(),
 	WH2(),
 	WS7000(),
+	TX141TH()
 ]
 
 def get_protocol(name):
