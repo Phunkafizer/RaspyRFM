@@ -748,7 +748,6 @@ class TX141TH(RcPulse):
 	'''
 	Temperature & humidity sensor LaCrosse TX141TH / TFA Dostmann 30.3221.02
 	Pulse Width Modulation
-	Short = 1, long = 2
 	'''
 	def __init__(self):
 		self._name = "TX141TH"
@@ -806,6 +805,54 @@ class TX141TH(RcPulse):
 		}
 		return topic, json.dumps(msg)
 
+class TFA30_3120_90(RcPulse):
+	'''
+	Temperature & humidity sensor TFA 30.3120.90
+	Pulse Width Modulation
+	'''
+	def __init__(self):
+		self._name = "TFA_30_3120_90"
+		self._class = CLASS_RCWEATHER
+		self._timebase = 250
+		self._pattern = "^[01]{44}$"
+		self._symbols = {
+			'0': [5, 4],
+			'1': [2, 4]
+		}
+		RcPulse.__init__(self)
+
+	def decode(self, pulsetrain):
+		symbols, tb, rep = self._decode_symbols(pulsetrain[0:87] + [1000])
+		if symbols:
+			chk = 0
+			for i in range(0, 40, 4):
+				chk += int(symbols[i:i+4], 2)
+			if (chk & 0x0F) != int(symbols[40:44], 2):
+				return
+			id = int(symbols[12:19], 2)
+			msgtype = int(symbols[8:12], 2)
+			
+			if msgtype == 0x00:
+				T = int(symbols[20:24], 2) * 10 + int(symbols[24:28], 2) + int(symbols[28:32], 2) / 10 - 50
+				return [id, T], tb, rep
+			elif msgtype == 0x0E:
+				pass
+
+	def get_decode_dict(self, decresult):
+		res = {
+			"id": decresult[0],
+			"T": decresult[1]
+		}
+		return res
+
+	def get_mqtt_from_dict(self, di):
+		topic = "/" + str(di["id"])
+		msg = {
+			"T": di["T"]
+		}
+		return topic, json.dumps(msg)
+
+
 protocols = [
 	Tristate(),
 	ITTristate(),
@@ -821,7 +868,8 @@ protocols = [
 	REVRitterShutter(),
 	WH2(),
 	WS7000(),
-	TX141TH()
+	TX141TH(),
+	TFA30_3120_90()
 ]
 
 def get_protocol(name):
