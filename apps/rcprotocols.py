@@ -908,21 +908,17 @@ class RfmPulseTRX(threading.Thread):
 			self.__rfm.set_params(
 				Datarate = RXDATARATE #kbit/s
 			)
-			print("Start Receive")
+			print("start receive")
 			self.__rfm.start_receive(self.__rxcb)
-			print("Receive Done")
+			print("stop receive")
 
 	def __rxcb(self, rfm):
 		bit = False
 		cnt = 1
 		train = []
-		bitfifo = 0
-		train *= 0
-		buf = []
-		print("RXCB enter")
+		print("rxcbenter")
 		while self.__event.isSet():
 			fifo = rfm.read_fifo_wait(64)
-			buf += fifo
 
 			for b in fifo:
 				mask = 0x80
@@ -939,41 +935,27 @@ class RfmPulseTRX(threading.Thread):
 						v &= v - 1
 						c += 1
 					'''
-					'''
+
 					if newbit == bit:
 						cnt += 1
-						if cnt > 10000:
-							print("RX FLAT")
+						if cnt > 100000*RXDATARATE/1000:
+							train.append(cnt)
+							self.__rxtraincb(train)
+							print("return rx")
 							return
 					else:
-						if cnt < 150*RXDATARATE/1000: #<150 us
-							train *= 0 #clear
-						elif cnt > 4000*RXDATARATE/1000:
-							if not bit:
-								train.append(cnt)
-								if len(train) > 20:
-									self.__rxtraincb(train)
-							train *= 0 #clear
-						elif len(train) > 0 or bit:
+						if bit or len(train) > 0:
 							train.append(cnt)
+						if cnt < 150*RXDATARATE/1000:
+							train = []
+						elif cnt > 4000*RXDATARATE/1000:
+							self.__rxtraincb(train)
+							train = []
 						cnt = 1
-						bit = not bit
-					'''
-					if newbit == bit:
-						cnt += 1
-					else:
-						train.append(cnt)
-						cnt = 1
-
-					if cnt > 10000:
-						s = ""
-						for b in buf:
-							s += f'{b:08b}'
-						print("RX end")
-						print(s)
-						return
+						bit = newbit
 
 					mask >>= 1
+		print("leave rx")
 
 	def send(self, train, timebase):
 		self.__event.clear()
@@ -1001,6 +983,8 @@ class RcTransceiver(threading.Thread):
 		del self.__rfmtrx
 
 	def __pushPulseTrain(self, train):
+		if len(train) < 20:
+			return
 		self.__lock.acquire()
 		self.__trainbuf.append(list(train))
 		self.__event.set()
@@ -1051,7 +1035,6 @@ class RcTransceiver(threading.Thread):
 	def run(self):
 		while True:
 			self.__event.wait()
-			print("event fired")
 			self.__lock.acquire()
 			train = None
 			if len(self.__trainbuf) > 0:
