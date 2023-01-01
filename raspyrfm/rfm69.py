@@ -6,62 +6,31 @@ import RPi.GPIO as GPIO
 FXOSC = 32E6
 FSTEP = FXOSC / (1<<19)
 
-# Raspberry RFM Module connection
-# RaspyRFM single module
-# Connect to pins 17-26 on raspberry pi
-#--------------------------------#
-#Raspi|Raspi|Raspi|RFM69|RaspyRFM#
-#Name |GPIO |Pin  |Name |PCB Pin #
-#--------------------------------#
-#3V3  |  -  | 17  |3.3V |   1    #
-# -   | 24  | 18  |DIO1 |   2    # only when PCB jumper closed
-#MOSI | 10  | 19  |MOSI |   3    #
-#GND  |  -  | 20  |GND  |   4    #
-#MISO |  9  | 21  |MISO |   5    #
-# -   | 25  | 22  |DIO0 |   6    #
-#SCKL | 11  | 23  |SCK  |   7    #
-#CE0  |  8  | 24  |NSS  |   8    #
-#CE1  |  7  | 26  |DIO2 |   10   # only when PCB jumper closed
-#--------------------------------#
+# RaspyRFM module pinout
+# Connect 10-pin header to pins 17-26 on PI
+# Connect 12-pin header to pins 15-26 in PI
+# -----------------------------
+# |      |     |single| twin  |
+# |Raspi |Raspi|RFM69 |RFM69  |
+# |Name  |Pin  |Pin   |Pin    |
+# |---------------------------|
+# |GPIO22| 15  |---   |DIO2#2 |
+# |GPIO23| 16  |DIO2  |DIO2#1 |
+# |3V3   | 17  |3.3V  |3.3V   |
+# |GPIO24| 18  |DIO1* |DIO0#2 |
+# |MOSI  | 19  |MOSI  |MOSI   |
+# |GND   | 20  |GND   |GND    |
+# |MISO  | 21  |MISO  |MISO   |
+# |GPIO25| 22  |DIO0  |DIO0#1 |
+# |SCKL  | 23  |SCK   |SCK    |
+# |CE0   | 24  |NSS   |NSS#1  |
+# |GND   | 25  |GND   |GND    |
+# |CE1   | 26  |---   |NSS#2  |
+# -----------------------------
+# * PCB jumper!
 
-# RaspyRFM twin module with 10-pin connector
-# Connect to pins 17-26 on raspberry pi
-#---------------------------------#
-#Raspi|Raspi|Raspi|RFM69 |RaspyRFM#
-#Name |GPIO |Pin  |Name  |PCB Pin #
-#---------------------------------#
-#3V3  | -   | 17  |3.3V  |   1    #
-#  -  | 24  | 18  |DIO0_2|   2    #
-#MOSI | 10  | 19  |MOSI  |   3    #
-#GND  |  -  | 20  |GND   |   4    #
-#MISO | 9   | 21  |MISO  |   5    #
-# -   | 25  | 22  |DIO0_1|   6    #
-#SCKL | 11  | 23  |SCK   |   7    #
-#CE0  | 8   | 24  |NSS1  |   8    #
-#CE1  | 7   | 26  |NSS2  |   10	  #
-#---------------------------------#
-
-# RaspyRFM twin module with 12-pin connector
-# Connect to pins 15-26 on raspberry pi
-#---------------------------------#
-#Raspi|Raspi|Raspi|RFM69 |RaspyRFM#
-#Name |GPIO |Pin  |Name  |PCB Pin #
-#---------------------------------#
-#  -  | 22  | 15  |DIO2_2|   1    #
-#  -  | 23  | 16  |DIO2_1|   2    #
-#3V3  | -   | 17  |3.3V  |   3    #
-#  -  | 24  | 18  |DIO0_2|   4    #
-#MOSI | 10  | 19  |MOSI  |   5    #
-#GND  | -   | 20  |GND   |   6    #
-#MISO | 9   | 21  |MISO  |   7    #
-#  -  | 25  | 22  |DIO0_1|   8    #
-#SCKL | 11  | 23  |SCK   |   9    #
-#CE0  | 8   | 24  |NSS1  |   10   #
-#CE1  | 7   | 26  |NSS2  |   12   #
-#---------------------------------#
-
-#RFM69 registers
-#common registers
+# RFM69 registers
+# common registers
 RegFifo = 0x00
 RegOpMode = 0x01
 RegDataModul = 0x02
@@ -78,11 +47,11 @@ RegListen1 = 0x0D
 RegListen2 = 0x0E
 RegListen3 = 0x0F
 RegVersion = 0x10
-#TX registers
+# TX registers
 RegPaLevel = 0x11
 RegPaRamp = 0x12
 RegOcp = 0x13
-#RX registers
+# RX registers
 RegLna = 0x18
 RegRxBw = 0x19
 RegAfcBw = 0x1A
@@ -96,7 +65,7 @@ RegFeiMsb = 0x21
 RegFeiLsb = 0x22
 RegRssiConfig = 0x23
 RegRssiValue = 0x24
-#IRQ & pin mapping registers
+# IRQ & pin mapping registers
 RegDioMapping1 = 0x25
 RegDioMapping2 = 0x26
 RegIrqFlags1 = 0x27
@@ -104,7 +73,7 @@ RegIrqFlags2 = 0x28
 RegRssiThresh = 0x29
 RegRxTimeout1 = 0x2A
 RegRxTimeout2 = 0x2B
-#packet engine registers
+# packet engine registers
 RegPreambleMsb = 0x2C
 RegPreambleLsb = 0x2D
 RegSyncConfig = 0x2E
@@ -125,28 +94,28 @@ RegTestPa2 = 0x5C
 RegTestDagc = 0x6F
 RegTestAfc = 0x71
 
-InterPacketRxDelay = 4 #Bitposition
+InterPacketRxDelay = 4 # Bitposition
 RestartRx = 2
 AutoRxRestartOn = 1
 AesOn = 0
 
-#Modulation type
+# Modulation type
 OOK = 1
 FSK = 0
 
-#DcFree
+# DcFree
 DcFree_None = 0
 DcFree_Manchester = 1
 DcFree_Whitening = 2
 
-#RFM69 modes
+# RFM69 modes
 MODE_SLEEP = 0
 MODE_STDBY = 1
 MODE_FS = 2
 MODE_TX = 3
 MODE_RX = 4
 
-#DIO packet mode
+# DIO packet mode
 DIO0_PM_CRC = 0
 DIO0_PM_PAYLOAD = 1
 DIO0_PM_SYNC = 2
@@ -155,7 +124,7 @@ DIO0_PM_SENT = 0
 DIO0_PM_TXDONE = 1
 DIO0_PM_PLLLOCK = 3
 
-#Packet format
+# Packet format
 PacketFormat_Fixed = 0
 PacketFormat_Variable = 1
 
@@ -184,7 +153,7 @@ class Rfm69(rfmbase.RfmBase):
 		self.__set_mode(MODE_STDBY)
 		config = {}
 
-		#SET DEFAULTS
+		# SET DEFAULTS
 		config[RegOpMode] = 0x04
 		config[RegDataModul] = 0x00
 		config[RegBitrateMsb] = 0x1A
@@ -237,10 +206,10 @@ class Rfm69(rfmbase.RfmBase):
 		config[RegTemp1] = 0x01
 		config[RegTemp2] = 0x00
 		config[RegTestLna] = 0x1B
-		config[RegTestDagc] = 0x30 #low beta 0
+		config[RegTestDagc] = 0x30 # low beta 0
 		config[RegTestAfc] = 0x00
 
-		config[RegPacketConfig1] = 0x00 #Fixed length, CRC off, no adr
+		config[RegPacketConfig1] = 0x00 # Fixed length, CRC off, no adr
 
 		for key in config:
 			self._write_reg(key, config[key])
@@ -262,16 +231,16 @@ class Rfm69(rfmbase.RfmBase):
 		self._set_reg(reg, 0xC0 >> dio, mapping << (6 - dio))
 
 	def __set_highPower(self):
-		#Must be called after initialization for rfm69hw
+		# Must be called after initialization for rfm69hw
 		if(self.__isrfm69hw == True):
 			self._write_reg(RegOcp, 0x0F) # OCP OFF
-			self._write_reg(RegPaLevel, (self.read_reg(RegPaLevel) & 0x1F) | 0x60) #PA0 OFF PA1 ON  PA2 ON
+			self._write_reg(RegPaLevel, (self.read_reg(RegPaLevel) & 0x1F) | 0x60) # PA0 OFF PA1 ON  PA2 ON
 		else:
-			self._write_reg(RegOcp, 0x1A) #OCP ON
-			self._write_reg(RegPaLevel, (self.read_reg(RegPaLevel) & 0x1F) | 0x80) #PA0 ON  PA1 OFF PA2 OFF
+			self._write_reg(RegOcp, 0x1A) # OCP ON
+			self._write_reg(RegPaLevel, (self.read_reg(RegPaLevel) & 0x1F) | 0x80) # PA0 ON  PA1 OFF PA2 OFF
 
 	def __set_highPowerRegs(self, mode):
-        	#Registers only present in rfm69hw
+        	# Registers only present in rfm69hw
 		if(self.__isrfm69hw):
 			if(mode == MODE_TX):
 				self._write_reg(RegTestPa1, 0x5D)
@@ -343,13 +312,13 @@ class Rfm69(rfmbase.RfmBase):
 				self._write_reg(RegSyncConfig,	 conf)
 				for i, d in enumerate(value):
 					self._write_reg(RegSyncValue1 + i, d)
-					
+
 			elif key == "AesKey":
 				if (len(value)) > 0:
-					self._set_reg(RegPacketConfig2, 1<<0, 1<<0) #AES on
+					self._set_reg(RegPacketConfig2, 1<<0, 1<<0) # AES on
 					self.__aes_on = True
 				else:
-					self._set_reg(RegPacketConfig2, 1<<0, 0<<0) #AES off
+					self._set_reg(RegPacketConfig2, 1<<0, 0<<0) # AES off
 					self.__aes_on = False
 				for i, d in enumerate(value):
 					self._write_reg(RegAesKey1 + i, d)
@@ -429,7 +398,7 @@ class Rfm69(rfmbase.RfmBase):
 		lfsr = 0x3fe
 		for i, d in enumerate(data):
 			data[i] = data[i] ^ ((lfsr >> 2) & 0xFF)
-			#roll LFSR
+			# roll LFSR
 			for j in range(8):
 				if ((lfsr >> 5) ^ lfsr) & 0x10 != 0:
 					lfsr |= 1<<0
@@ -450,7 +419,7 @@ class Rfm69(rfmbase.RfmBase):
 		self.__event.set()
 		self.mode_standby()
 
-		#flush FIFO
+		# flush FIFO
 		status = self.read_reg(RegIrqFlags2)
 		while (status & 0x40 == 0x40):
 			self.read_reg(RegFifo)
@@ -459,8 +428,8 @@ class Rfm69(rfmbase.RfmBase):
 			data.insert(0, len(data))
 		else:
 			self._write_reg(RegPayloadLength, 0 if len(data) > 255 else len(data))
-		self._write_reg(RegFifoThresh, 0x80 | self.__fifothresh) #start TX with 1st byte in FIFO
-		self.__set_dio_mapping(0, DIO0_PM_SENT) #DIO0 -> PacketSent
+		self._write_reg(RegFifoThresh, 0x80 | self.__fifothresh) # start TX with 1st byte in FIFO
+		self.__set_dio_mapping(0, DIO0_PM_SENT) # DIO0 -> PacketSent
 
 		l = min(len(data), 64)
 		if not self.__aes_on:
@@ -473,10 +442,10 @@ class Rfm69(rfmbase.RfmBase):
 				break
 			while True:
 				status = self.read_reg(RegIrqFlags2)
-				if (status & (1<<5)) == 0: #below fifothresh
+				if (status & (1<<5)) == 0: # below fifothresh
 					l = min(len(data), self.__fifothresh)
 					break
-				if (status & (1<<7)) == 0: #space for at least 1 bytearray
+				if (status & (1<<7)) == 0: # space for at least 1 bytearray
 					l = 1
 					break
 		if self.__aes_on:
@@ -490,24 +459,24 @@ class Rfm69(rfmbase.RfmBase):
 		ret = []
 		while length > 0:
 			flags = self.read_reg(RegIrqFlags2)
-			if ((flags & (1<<5)) != 0) and (length >= 32): #FIFO level?
+			if ((flags & (1<<5)) != 0) and (length >= 32): # FIFO level?
 				ret += self.read_fifo_burst(self.__fifothresh)
 				length -= self.__fifothresh
-			if (flags & (1<<6)) != 0: #FIFO not empty?
+			if (flags & (1<<6)) != 0: # FIFO not empty?
 				ret.append(self.read_reg(RegFifo))
 				length -= 1
 		return ret
 
 	def GetNoiseFloor(self):
 		self.__mutex.acquire()
-		#save values
+		# save values
 		rssithresh = self.read_reg(RegRssiThresh)
 		ookthresh = self.read_reg(RegOokFix)
 		sync = self.read_reg(RegSyncConfig)
 
 		self._write_reg(RegRssiThresh, 240)
-		self._write_reg(RegSyncConfig, 1<<6) #no sync, always fill FIFO
-		self._write_reg(RegPayloadLength, 0) #unlimited length
+		self._write_reg(RegSyncConfig, 1<<6) # no sync, always fill FIFO
+		self._write_reg(RegPayloadLength, 0) # unlimited length
 		self.__set_mode(MODE_RX)
 		thresh = 40
 		while True:
@@ -520,7 +489,7 @@ class Rfm69(rfmbase.RfmBase):
 			if i == 149:
 				break
 
-		#restore registers
+		# restore registers
 		self._write_reg(RegRssiThresh, rssithresh)
 		self._write_reg(RegOokFix, ookthresh)
 		self._write_reg(RegSyncConfig, sync)
@@ -534,12 +503,13 @@ class Rfm69(rfmbase.RfmBase):
 			self._write_reg(RegPayloadLength, length)
 			self._write_reg(RegFifoThresh, self.__fifothresh)
 			if self.__syncsize > 0:
-				self.__set_dio_mapping(0, DIO0_PM_SYNC) #DIO0 -> SyncAddress
+				self.__set_dio_mapping(0, DIO0_PM_SYNC) # DIO0 -> SyncAddress
 			else:
-				self.__set_dio_mapping(0, DIO0_PM_RSSI) #DIO0 -> RSSI
+				self.__set_dio_mapping(0, DIO0_PM_RSSI) # DIO0 -> RSSI
 			self.__set_mode(MODE_RX)
 			self.__mutex.release()
 			self.__wait_int()
+			self._set_reg(RegAfcFei, 0x20, 0x20) # start FEI measurement
 			self.__mutex.acquire()
 			if self.__mode == MODE_RX:
 				break
@@ -556,17 +526,22 @@ class Rfm69(rfmbase.RfmBase):
 			length = self.read_fifo_wait(1)[0]
 
 		if self.__aes_on:
-			self.__set_dio_mapping(0, DIO0_PM_PAYLOAD) #DIO0 -> payload OK
+			self.__set_dio_mapping(0, DIO0_PM_PAYLOAD) # DIO0 -> payload OK
 			self.__wait_int()
 		result = self.read_fifo_wait(length)
 
 		rssi = -self.read_reg(RegRssiValue) / 2
+
 		afc = self.read_reg(RegAfcMsb) << 8
 		afc = afc | self.read_reg(RegAfcLsb)
-
 		if afc >= 0x8000:
 			afc = afc - 0x10000
 
+		fei = self.read_reg(RegFeiMsb) << 8
+		fei = fei | self.read_reg(RegFeiLsb)
+		if fei >= 0x8000:
+			fei = fei - 0x10000
+
 		self.mode_standby()
 		self.__mutex.release()
-		return (result, rssi, afc)
+		return (result, rssi, afc, fei)

@@ -20,7 +20,7 @@ except ImportError:
 
 lock = threading.Lock()
 
-script_dir = os.path.dirname(__file__)
+script_dir = os.path.dirname(os.path.realpath(__file__))
 with open(script_dir + "/lacrossegw.conf") as jfile:
     config = json.load(jfile)
 
@@ -78,12 +78,14 @@ except:
     print("mqtt init error")
 
 rfm.set_params(
-    Freq = 868.300, #MHz center frequency
-    Datarate = 9.579, #kbit/s baudrate
-    ModulationType = rfm69.FSK, #modulation
-    SyncPattern = [0x2d, 0xd4], #syncword
-    Bandwidth = 100, #kHz bandwidth
-    RssiThresh = -100, #-100 dB RSSI threshold
+    Freq = 868.300, # MHz center frequency
+    Datarate = 9.579, # kbit/s baudrate
+    ModulationType = rfm69.FSK, # modulation
+    SyncPattern = [0x2d, 0xd4], # syncword
+    Bandwidth = 200, # kHz
+    AfcBandwidth = 200, # kHz
+    #AfcFei = 0x0C, # AFC auto clear, AFC auto on
+    RssiThresh = -110, # dBm RSSI threshold
 )
 
 class BaudChanger(threading.Thread):
@@ -93,7 +95,7 @@ class BaudChanger(threading.Thread):
 
     def run(self):
         while True:
-            time.sleep(15) 
+            time.sleep(15)
             print("Change baudrate")
             if self.baud:
                 rfm.set_params(Datarate = 9.579)
@@ -210,8 +212,12 @@ class MyHttpRequestHandler(Handler):
             self.getjson()
 
         elif p == '/':
-            self.path = script_dir + '/index.html'
-            return Handler.do_GET(self)
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+
+            with open(script_dir + '/index.html', 'rb') as file:
+                self.wfile.write(file.read())
 
         elif p == '/history' and influxClient and name:
             resp = influxClient.query(
@@ -320,15 +326,16 @@ while 1:
     cache[id]["ts"] = datetime.now()
     cache[id]["count"] += 1
 
-    line = u" id: {:2}  ".format(id)
-    line += u'room {:12}  '.format(payload["room"][:12] if ("room" in payload) else "---")
-    line += u' T: {:5} \u00b0C  '.format(payload["T"])
+    line = u"|id: {:2}  ".format(id)
+    line += u'{:12}|'.format(payload["room"][:12] if ("room" in payload) else "---")
+    line += u'T: {:5.1f} \u00b0C|'.format(payload["T"])
     if "RH" in payload:
-        line += 'RH: {:2} %  '.format(payload["RH"])
-    line += "battery: " + ("LOW  " if payload["batlo"] else "OK   ")
-    line += "init: " + ("true   " if payload["init"] else "false  ")
+        line += 'RH: {:2} %|'.format(payload["RH"])
+    line += "battery: " + ("LOW" if payload["batlo"] else "OK ") + "|"
+    line += "init: " + ("1" if payload["init"] else "0") + "|"
+    line += "RSSI: {:5.1f} dBm|".format(rxObj[1])
+    line += "FEI: {:5.1f} kHz|".format(rxObj[3] * rfm69.FSTEP / 1000)
 
-    print('------------------------------------------------------------------------------')
     print(line)
     lock.release()
 
@@ -336,10 +343,10 @@ while 1:
         if influxClient:
             writeInflux(payload)
     except:
-        pass
+        print("Error writing to influx")
 
     try:
         if mqttClient:
             mqttClient.publish('home/lacrosse/'+ payload['id'], json.dumps(payload))
     except:
-        pass
+        print("Error writing to MQTT!")

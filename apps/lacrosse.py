@@ -26,7 +26,6 @@ rfm.set_params(
 	Freq = 868.30, #MHz center frequency
 	Datarate = 9.579, #kbit/s baudrate
 	ModulationType = rfm69.FSK, #modulation
-	Deviation = 30, #kHz frequency deviation
 	SyncPattern = [0x2d, 0xd4], #syncword
 	Bandwidth = 150, #kHz bandwidth
 	RssiThresh = -105, #dBm RSSI threshold

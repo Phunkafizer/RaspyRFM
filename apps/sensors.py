@@ -59,10 +59,11 @@ class lacross(rawsensor):
                 self._data['batlo'] = bool(data[0][3] & 1<<7)
                 self._data['RSSI'] = data[1]
                 self._data['AFC'] = data[2]
+                self._data['FEI'] = data[3]
 
         def __str__(self):
                 res = 'La crosse ' + str(self._data)
-                return res; 
+                return res;
 
         @staticmethod
         def Create(data):
