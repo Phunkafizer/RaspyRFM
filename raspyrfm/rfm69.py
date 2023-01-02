@@ -389,7 +389,8 @@ class Rfm69(rfmbase.RfmBase):
 		self.__event.clear()
 		if GPIO.input(self.__gpio_int):
 			return True
-		self.__event.wait()
+		while not self.__event.wait(0.5):
+			pass
 		return GPIO.input(self.__gpio_int)
 
 	def whiten_hope(self, data):
@@ -524,6 +525,12 @@ class Rfm69(rfmbase.RfmBase):
 	def start_receive(self, cb):
 		self.__start_rx(0)
 		cb(self)
+		self.mode_standby()
+		self.__mutex.release()
+
+	def receive_stop(self):
+		self.__event.set()
+		self.__mutex.acquire()
 		self.mode_standby()
 		self.__mutex.release()
 

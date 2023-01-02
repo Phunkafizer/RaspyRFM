@@ -92,20 +92,22 @@ class BaudChanger(threading.Thread):
     baud = False
     def __init__(self):
         threading.Thread.__init__(self)
+        self.daemon = True
+        self.start()
 
     def run(self):
         while True:
             time.sleep(15)
-            print("Change baudrate")
             if self.baud:
-                rfm.set_params(Datarate = 9.579)
+		dr = 9.579
             else:
-                rfm.set_params(Datarate = 17.241)
+                dr = 17.241
+            rfm.receive_stop()
+            print("Switch baudrate to " + str(dr) + " kbit/s")
+            rfm.set_params(Datarate = dr)
             self.baud = not self.baud
 
 baudChanger = BaudChanger()
-baudChanger.daemon = True
-baudChanger.start()
 
 def writeInflux(payload):
     if not influxClient:
@@ -331,9 +333,11 @@ while 1:
     line += u'T: {:5.1f} \u00b0C|'.format(payload["T"])
     if "RH" in payload:
         line += 'RH: {:2} %|'.format(payload["RH"])
+    else:
+        line += 'RH: -- %|'
     line += "battery: " + ("LOW" if payload["batlo"] else "OK ") + "|"
     line += "init: " + ("1" if payload["init"] else "0") + "|"
-    line += "RSSI: {:5.1f} dBm|".format(rxObj[1])
+    line += "RSSI: {:6.1f} dBm|".format(rxObj[1])
     line += "FEI: {:5.1f} kHz|".format(rxObj[3] * rfm69.FSTEP / 1000)
 
     print(line)

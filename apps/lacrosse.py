@@ -44,6 +44,7 @@ class BaudChanger(threading.Thread):
 			else:
 				dr = 17.241
 			print("Switch baudrate to " + str(dr) + " kbit/s")
+			rfm.receive_stop()
 			rfm.set_params(Datarate = dr)
 			self.baud = not self.baud
 
