@@ -10,6 +10,7 @@ rfm = None
 parser = argparse.ArgumentParser()
 parser.add_argument("-m", "--module", type=int, metavar="1-4", help=u"RaspyRFM module 1-4", default=0)
 args = parser.parse_args()
+mutex = threading.Lock()
 
 if args.module > 0:
 	rfm = RaspyRFM(args.module, RFM69)
@@ -32,29 +33,37 @@ rfm.set_params(
 )
 
 class BaudChanger(threading.Thread):
-	baud = False
 	def __init__(self):
 		threading.Thread.__init__(self)
+		self.daemon = True
+		#self.start()
 
 	def run(self):
+		baudrates = [9.579, 17.241]
+		i = 0
 		while True:
 			time.sleep(15)
-			if self.baud:
-				dr = 9.579
-			else:
-				dr = 17.241
-			print("Switch baudrate to " + str(dr) + " kbit/s")
 			rfm.receive_stop()
-			rfm.set_params(Datarate = dr)
-			self.baud = not self.baud
+
+			i += 1
+			if i == len(baudrates):
+				i = 0
+			bd = baudrates[i]
+
+			print("Switch baudrate to " + str(bd) + " kbit/s")
+			mutex.acquire()
+			rfm.set_params(Datarate = bd)
+			mutex.release()
 
 baudChanger = BaudChanger()
-baudChanger.daemon = True
-baudChanger.start()
 
 while 1:
-	data = rfm.receive(12)
+	mutex.acquire()
+	data = rfm.receive(-1)
+	mutex.release()
+
 	if data == None:
+		print("---")
 		continue
 
 	obj = rawsensor.CreateSensor(data).GetData()
