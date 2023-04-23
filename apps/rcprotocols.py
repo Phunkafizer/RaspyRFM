@@ -39,10 +39,10 @@ class RcPulse:
 				p1 = 1.0 * symlist[i]
 				p2 = 1.0 * symlist[i+1]
 
-		f = (p2-p1) / (p2+p1)
-
-		self._minwidth = self._timebase * (1 - f)
-		self._maxwidth = self._timebase * (1 + f)
+		if q > 0:
+			f = (p2-p1) / (p2+p1)
+			self._minwidth = self._timebase * (1 - f)
+			self._maxwidth = self._timebase * (1 + f)
 
 	def _reset(self):
 		self.__numbits = 0
@@ -165,6 +165,18 @@ class RcPulse:
 			pay = pay.upper()
 		return topic, pay
 
+class RcRaw(RcPulse):
+	def __init__(self, timebase):
+		self._timebase = timebase
+		self._symbols = {}
+		RcPulse.__init__(self)
+
+	def build_raw(self, pulsetrain, repetitions):
+		self._reset()
+		for p in pulsetrain:
+			self._add_pulses([round(p / self._timebase)])
+		self._add_finish()
+		return self._ookdata * repetitions
 
 class TristateBase(RcPulse): #Baseclass for old intertechno, Brennenstuhl, ...
 	def __init__(self):
@@ -769,7 +781,7 @@ class TX141TH(RcPulse):
 			for j in range(8):
 				if ((b >> j) & 1) != 0:
 					sum ^= key
-				
+
 				if (key & 0x80) != 0:
 					key = (key << 1) ^ 0x31
 				else:
@@ -831,7 +843,7 @@ class TFA30_3120_90(RcPulse):
 				return
 			id = int(symbols[12:19], 2)
 			msgtype = int(symbols[8:12], 2)
-			
+
 			if msgtype == 0x00:
 				T = int(symbols[20:24], 2) * 10 + int(symbols[24:28], 2) + int(symbols[28:32], 2) / 10 - 50
 				return [id, T], tb, rep
@@ -949,13 +961,13 @@ class RfmPulseTRX(threading.Thread):
 						bit = not bit
 					mask >>= 1
 
-	def send(self, train, timebase):
+	def send(self, data, timebase):
 		self.__event.clear()
 		self.__rfm.set_params(
 			Datarate = 1000.0 / timebase
 		)
 		self.__event.set()
-		self.__rfm.send(train)
+		self.__rfm.send(data)
 
 class RcTransceiver(threading.Thread):
 	def __init__(self, module, frequency, rxcallback, statecallback = None):
