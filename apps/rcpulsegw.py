@@ -23,7 +23,7 @@ parser.add_argument("-m", "--module", type=int, metavar="1-4", help=u"RaspyRFM m
 parser.add_argument("-f", "--frequency", type=float, help=u"frequency in MHz", default=433.92)
 args = parser.parse_args()
 
-script_dir = os.path.dirname(__file__)
+script_dir = os.path.dirname(os.path.realpath(__file__))
 with open(script_dir + "/rcpulsegw.conf") as jfile:
 	config = json.load(jfile)
 
@@ -52,7 +52,8 @@ if not raspyrfm_test(args.module, RFM69):
 	print("Error! RaspyRFM not found")
 	exit()
 
-rctrx = rcprotocols.RcTransceiver(args.module, args.frequency, rccb, statecb)
+cb = rccb
+rctrx = rcprotocols.RcTransceiver(args.module, args.frequency, cb, statecb)
 
 def apicb(data):
 	print("TX from API: " + str(data))
@@ -66,7 +67,13 @@ apisrv = apiserver.ApiServer(p, apicb)
 
 def on_connect(client, userdata, flags, rc):
 	print("Connected with result code "+str(rc))
-	client.subscribe(MQTT_BASE_TOPIC + "/#")
+	if rc == 0:
+		client.subscribe(MQTT_BASE_TOPIC + "/#")
+	#client.connected_flag = rc == 0
+
+def on_disconnect(client, userdata, rc):
+	print("MQTT disconnected")
+	#client.connected_flag = False
 
 def on_message(client, userdata, msg):
 	tl = msg.topic.split("/")
@@ -80,18 +87,21 @@ def on_message(client, userdata, msg):
 
 
 if mqttClient:
+	mqttClient.connected_flag = False
+	mqttClient.loop_start()
 	mqttClient.on_connect = on_connect
+	mqttClient.on_disconnect = on_disconnect
 	mqttClient.on_message = on_message
 	mqttClient.username_pw_set(
 		config["mqtt"]["user"] if ("mqtt" in config) and ("user" in config["mqtt"]) else "",
 		config["mqtt"]["pass"] if ("mqtt" in config) and ("pass" in config["mqtt"]) else None,
 	)
-	mqttClient.connect(
-		config["mqtt"]["server"] if ("mqtt" in config) and ("server" in config["mqtt"]) else "127.0.0.1",
-		config["mqtt"]["port"] if ("mqtt" in config) and ("port" in config["mqtt"]) else 1883,
-		30
-	)
-	mqttClient.loop_start()
+	server = config["mqtt"]["server"] if ("mqtt" in config) and ("server" in config["mqtt"]) else "127.0.0.1"
+	port = config["mqtt"]["port"] if ("mqtt" in config) and ("port" in config["mqtt"]) else 1883
+	try:
+		mqttClient.connect(server, port, 30)
+	except:
+		pass
 
 while True:
 	time.sleep(1)

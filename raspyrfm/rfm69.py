@@ -124,10 +124,6 @@ DIO0_PM_SENT = 0
 DIO0_PM_TXDONE = 1
 DIO0_PM_PLLLOCK = 3
 
-# Packet format
-PacketFormat_Fixed = 0
-PacketFormat_Variable = 1
-
 class Rfm69(rfmbase.RfmBase):
 	def __init__(self, cs = 0, gpio_int = 25):
 		if not rfmbase.RfmBase.test(cs, 0x24):
@@ -136,14 +132,17 @@ class Rfm69(rfmbase.RfmBase):
 
 		rfmbase.RfmBase.__init__(self, cs)
 
-		self.__event = threading.Event()
+		self.__irqEvent = threading.Event()
+		self.__rxEvent = threading.Event()
+		self.__rxEvent.set()
 		self.__gpio_int = gpio_int
 		self.__mutex = threading.Lock()
 		self.__syncsize = 4
-		self.__fifothresh = 32
-		self.__packet_format = PacketFormat_Fixed
+		self.__fifothresh = 15
+
 		self.__aes_on = False
 		self.__isrfm69hw = False
+		self.__rxMode = False
 
 		print("RFM69 found on CS " + str(cs), file=sys.stderr)
 		GPIO.setmode(GPIO.BCM)
@@ -219,7 +218,7 @@ class Rfm69(rfmbase.RfmBase):
 		print("Init complete.", file = sys.stderr)
 
 	def __rfm_irq(self, ch):
-		self.__event.set()
+		self.__irqEvent.set()
 
 	def __set_dio_mapping(self, dio, mapping):
 		if dio > 3:
@@ -264,7 +263,6 @@ class Rfm69(rfmbase.RfmBase):
 
 	def set_params(self, **params):
 		self.__mutex.acquire()
-		self.__event.set()
 		for key in params:
 			value = params[key]
 			if key == "Freq":
@@ -376,23 +374,19 @@ class Rfm69(rfmbase.RfmBase):
 			elif key == "OokPeakThreshDec":
 				self._set_reg(RegOokPeak, 7<<0, value)
 
-			elif key == "PacketFormat":
-				self._set_reg(RegPacketConfig1, 1<<7, value<<7)
-				self.__packet_format = value
-
 			else:
 				print("Unrecognized option >>" + key + "<<", file=sys.stderr)
 
-		self.mode_standby()
+		#self.mode_standby()
 		self.__mutex.release()
 
 	def __wait_int(self):
-		self.__event.clear()
 		if GPIO.input(self.__gpio_int):
-			return
-		while not self.__event.wait(0.5):
-			if GPIO.input(self.__gpio_int):
-				break
+			print("IS HIGH")
+			return True
+		while not self.__irqEvent.wait(0.5):
+			pass
+		return GPIO.input(self.__gpio_int)
 
 	def whiten_hope(self, data):
 		lfsr = 0x3fe
@@ -414,17 +408,18 @@ class Rfm69(rfmbase.RfmBase):
 					lfsr |= 1<<9
 				lfsr >>= 1
 
-	def send(self, data):
+	def send(self, data, var_pack_format = False):
 		self.__mutex.acquire()
-		self.__event.set()
+		self.__irqEvent.clear()
 		self.mode_standby()
+		self.__mutex.release()
 
 		# flush FIFO
 		status = self.read_reg(RegIrqFlags2)
 		while (status & 0x40 == 0x40):
 			self.read_reg(RegFifo)
 			status = self.read_reg(RegIrqFlags2)
-		if self.__packet_format == PacketFormat_Variable:
+		if var_pack_format:
 			data.insert(0, len(data))
 		else:
 			self._write_reg(RegPayloadLength, 0 if len(data) > 255 else len(data))
@@ -453,18 +448,30 @@ class Rfm69(rfmbase.RfmBase):
 
 		self.__wait_int()
 		self.mode_standby()
-		self.__mutex.release()
 
 	def read_fifo_wait(self, length):
 		ret = []
-		while length > 0:
+		ready = False
+		while length != 0 and self.__rxMode:
 			flags = self.read_reg(RegIrqFlags2)
-			if ((flags & (1<<5)) != 0) and (length >= 32): # FIFO level?
-				ret += self.read_fifo_burst(self.__fifothresh)
-				length -= self.__fifothresh
-			if (flags & (1<<6)) != 0: # FIFO not empty?
+			#print(length, hex(flags))
+			if (flags & (1<<2)) != 0: # PayloadReady
+				ready = True
+
+			if (flags & (1<<5)) != 0: # FIFO level?
+				l = self.__fifothresh if length >= self.__fifothresh else length
+				ret += self.read_fifo_burst(l)
+				length -= l
+				continue
+
+			if (flags & (1<<6)) != 0 and ((length < self.__fifothresh) or ready):
 				ret.append(self.read_reg(RegFifo))
 				length -= 1
+				continue
+
+			if (flags == 0) and ready:
+				break
+
 		return ret
 
 	def GetNoiseFloor(self):
@@ -497,38 +504,74 @@ class Rfm69(rfmbase.RfmBase):
 		self.__mutex.release()
 		return thresh
 
-	def __start_rx(self, length):
+	def receive_start(self, length):
 		self.__mutex.acquire()
-		while True:
-			self._write_reg(RegPayloadLength, length)
-			self._write_reg(RegFifoThresh, self.__fifothresh)
-			if self.__syncsize > 0:
-				self.__set_dio_mapping(0, DIO0_PM_SYNC) # DIO0 -> SyncAddress
-			else:
-				self.__set_dio_mapping(0, DIO0_PM_RSSI) # DIO0 -> RSSI
-			self.__set_mode(MODE_RX)
-			self.__mutex.release()
-			self.__wait_int()
-			self._set_reg(RegAfcFei, 0x20, 0x20) # start FEI measurement
-			self.__mutex.acquire()
-			if self.__mode == MODE_RX:
-				break
+		self.__rxMode = True
+		self.__rxEvent.clear()
 
-	def start_receive(self, cb):
-		self.__start_rx(0)
-		cb(self)
-		self.mode_standby()
+		if length == -1:
+			#variable length packet format
+			self._set_reg(RegPacketConfig1, 1<<7, 1<<7)
+			self._write_reg(RegPayloadLength, 255)
+		else:
+			#fixed or unlimited length packet format
+			self._set_reg(RegPacketConfig1, 1<<7, 0<<7)
+			self._write_reg(RegPayloadLength, length)
+
+		self._write_reg(RegFifoThresh, self.__fifothresh)
+		if self.__syncsize > 0:
+			self.__set_dio_mapping(0, DIO0_PM_SYNC) # DIO0 -> SyncAddress
+		else:
+			self.__set_dio_mapping(0, DIO0_PM_RSSI) # DIO0 -> RSSI
+		self.__set_mode(MODE_RX)
+		self.__irqEvent.clear()
 		self.__mutex.release()
 
-	def receive(self, length):
-		self.__start_rx(length)
-		if self.__packet_format == PacketFormat_Variable:
-			length = self.read_fifo_wait(1)[0]
+		if self.__wait_int():
+			self._set_reg(RegAfcFei, 0x20, 0x20) # start FEI measurement
 
-		if self.__aes_on:
+	def receive_stop(self):
+		self.__mutex.acquire()
+		self.__rxMode = False
+		self.__irqEvent.set()
+		self.__mutex.release()
+		#wait until receiveroutine is ready
+		self.__rxEvent.wait()
+
+	def receive_end(self):
+		self.__mutex.acquire()
+		self.mode_standby()
+		self.__rxMode = False
+		self.__rxEvent.set()
+		self.__mutex.release()
+
+	def receive(self, length=-1):
+		self.receive_start(length)
+
+		self.__mutex.acquire()
+		if not self.__rxMode:
+			self.mode_standby()
+			self.__rxEvent.set()
+			self.__mutex.release()
+			return None
+		self.__irqEvent.clear()
+		self.__mutex.release()
+
+		if self.__aes_on or (length > 0 and length <= 64):
 			self.__set_dio_mapping(0, DIO0_PM_PAYLOAD) # DIO0 -> payload OK
 			self.__wait_int()
+
 		result = self.read_fifo_wait(length)
+		self.__mutex.acquire()
+		if not self.__rxMode:
+			self.mode_standby()
+			self.__rxEvent.set()
+			self.__mutex.release()
+			return None
+		self.__mutex.release()
+
+		if length == -1 and len(result) > 0:
+			result.pop(0)
 
 		rssi = -self.read_reg(RegRssiValue) / 2
 
@@ -542,6 +585,6 @@ class Rfm69(rfmbase.RfmBase):
 		if fei >= 0x8000:
 			fei = fei - 0x10000
 
-		self.mode_standby()
-		self.__mutex.release()
+		self.receive_end()
+		
 		return (result, rssi, afc, fei)

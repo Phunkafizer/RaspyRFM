@@ -19,6 +19,9 @@ except ImportError:
     from urllib.parse import urlparse, parse_qs
 
 lock = threading.Lock()
+event = threading.Event()
+event.set()
+rfmlock = threading.Lock()
 
 script_dir = os.path.dirname(os.path.realpath(__file__))
 with open(script_dir + "/lacrossegw.conf") as jfile:
@@ -89,23 +92,30 @@ rfm.set_params(
 )
 
 class BaudChanger(threading.Thread):
-    baud = False
     def __init__(self):
         threading.Thread.__init__(self)
+        self.daemon = True
+        self.start()
 
     def run(self):
+        baudrates = [9.579, 17.241]
+        i = 0
         while True:
             time.sleep(15)
-            print("Change baudrate")
-            if self.baud:
-                rfm.set_params(Datarate = 9.579)
-            else:
-                rfm.set_params(Datarate = 17.241)
-            self.baud = not self.baud
+            event.clear()
+            rfm.receive_stop()
+            i += 1
+            if i == len(baudrates):
+                i = 0
+            bd = baudrates[i]
+
+            print("Switch baudrate to " + str(bd) + " kbit/s")
+            rfmlock.acquire()
+            rfm.set_params(Datarate = bd)
+            rfmlock.release()
+            event.set()
 
 baudChanger = BaudChanger()
-baudChanger.daemon = True
-baudChanger.start()
 
 def writeInflux(payload):
     if not influxClient:
@@ -250,13 +260,14 @@ server_thread.start()
 p = config["apiport"] if "apiport" in config else 1991
 apisrv = apiserver.ApiServer(p)
 
-print("Waiting for sensors...")
-
 while 1:
-    rxObj = rfm.receive(7)
+    event.wait()
+    rfmlock.acquire()
+    rxData = rfm.receive(7)
+    rfmlock.release()
 
     try:
-        sensorObj = sensors.rawsensor.CreateSensor(rxObj)
+        sensorObj = sensors.rawsensor.CreateSensor(rxData)
         sensorData = sensorObj.GetData()
         payload = {}
         id = sensorData["ID"]
@@ -266,8 +277,8 @@ while 1:
     except:
         continue
 
-    payload["rssi"] = rxObj[1]
-    payload["afc"] = rxObj[2]
+    payload["rssi"] = rxData[1]
+    payload["afc"] = rxData[2]
     payload["batlo"] = sensorData['batlo']
     payload["init"] = sensorData["init"]
     lock.acquire()
@@ -326,16 +337,17 @@ while 1:
     cache[id]["ts"] = datetime.now()
     cache[id]["count"] += 1
 
-    line = u"|id: {:2}  ".format(id)
-    line += u'{:12}|'.format(payload["room"][:12] if ("room" in payload) else "---")
-    line += u'T: {:5.1f} \u00b0C|'.format(payload["T"])
+    line = "|id: {:2}  ".format(id)
+    line += '{:12}|'.format(payload["room"][:12] if ("room" in payload) else "---")
+    line += 'T: {:5.1f} C|'.format(payload["T"])
     if "RH" in payload:
         line += 'RH: {:2} %|'.format(payload["RH"])
+    else:
+        line += 'RH: -- %|'
     line += "battery: " + ("LOW" if payload["batlo"] else "OK ") + "|"
     line += "init: " + ("1" if payload["init"] else "0") + "|"
-    line += "RSSI: {:5.1f} dBm|".format(rxObj[1])
-    line += "FEI: {:5.1f} kHz|".format(rxObj[3] * rfm69.FSTEP / 1000)
-
+    line += "RSSI: {:6.1f} dBm|".format(rxData[1])
+    line += "FEI: {:5.1f} kHz|".format(rxData[3] * rfm69.FSTEP / 1000)
     print(line)
     lock.release()
 

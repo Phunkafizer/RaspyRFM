@@ -769,7 +769,7 @@ class TX141TH(RcPulse):
 			for j in range(8):
 				if ((b >> j) & 1) != 0:
 					sum ^= key
-				
+
 				if (key & 0x80) != 0:
 					key = (key << 1) ^ 0x31
 				else:
@@ -831,7 +831,7 @@ class TFA30_3120_90(RcPulse):
 				return
 			id = int(symbols[12:19], 2)
 			msgtype = int(symbols[8:12], 2)
-			
+
 			if msgtype == 0x00:
 				T = int(symbols[20:24], 2) * 10 + int(symbols[24:28], 2) + int(symbols[28:32], 2) / 10 - 50
 				return [id, T], tb, rep
@@ -883,40 +883,50 @@ class RfmPulseTRX(threading.Thread):
 	def __init__(self, module, rxcb, frequency):
 		self.__rfm = RaspyRFM(module, RFM69)
 		self.__rfm.set_params(
-			Freq = frequency, #MHz
-			Bandwidth = 500, #kHz
+			Freq = frequency, # MHz
+			Bandwidth = 500, # kHz
 			SyncPattern = [],
-			RssiThresh = -105, #dBm
+			RssiThresh = -70, # dBm
 			ModulationType = rfm69.OOK,
-			OokThreshType = 1, #peak thresh
-			OokPeakThreshDec = 3,
+			OokThreshType = 1, # peak thresh
+			OokPeakThreshDec = 3, # decrement once every 8 chips
+			OokFixedThresh = 125, # floor threshold in peak mode
 			Preamble = 0,
 			TxPower = 13
 		)
-		self.__rxtraincb = rxcb
-		self.__event = threading.Event()
-		self.__event.set()
-		threading.Thread.__init__(self)
-		self.daemon = True
-		self.start()
+		self.__rxevent = threading.Event()
+		self.__rxevent.set()
+		self.__rfmlock = threading.Lock()
+
+		if rxcb is not None:
+			self.__rxtraincb = rxcb
+			threading.Thread.__init__(self)
+			self.daemon = True
+			self.start()
 
 	def run(self):
 		while True:
-			self.__event.wait()
-			self.__rfm.set_params(
-				Datarate = RXDATARATE #kbit/s
-			)
-			self.__rfm.start_receive(self.__rxcb)
+			self.__rxevent.wait()
+			self.__rfmlock.acquire()
+			self.__rfm.set_params(Datarate = RXDATARATE)
+			self.__rfm.receive_start(0) # unlimited length
+			self.__receive()
+			self.__rfm.receive_end()
+			self.__rfmlock.release()
+			continue
 
-	def __rxcb(self, rfm):
+	def __receive(self):
 		bit = False
 		cnt = 1
 		train = []
-		bitfifo = 0
-		while self.__event.isSet():
-			fifo = rfm.read_fifo_wait(64)
+		while True:
+			fifo = self.__rfm.read_fifo_wait(64)
+			if len(fifo) == 0:
+				return
 
 			for b in fifo:
+				#print "{0:08b}".format(b),
+				#continue
 				mask = 0x80
 				while mask != 0:
 					newbit = (b & mask) != 0
@@ -934,28 +944,33 @@ class RfmPulseTRX(threading.Thread):
 
 					if newbit == bit:
 						cnt += 1
-					else:
-						if cnt < 150*RXDATARATE/1000: #<150 us
-							train *= 0 #clear
-						elif cnt > 4000*RXDATARATE/1000:
-							if not bit:
-								train.append(cnt)
-								if len(train) > 20:
-									self.__rxtraincb(train)
-							train *= 0 #clear
-						elif len(train) > 0 or bit:
+						if cnt > 100000*RXDATARATE/1000:
 							train.append(cnt)
+							self.__rxtraincb(train)
+							return
+					else:
+						if bit or len(train) > 0:
+							train.append(cnt)
+						if cnt < 150*RXDATARATE/1000:
+							train = []
+						elif cnt > 4000*RXDATARATE/1000:
+							self.__rxtraincb(train)
+							train = []
 						cnt = 1
-						bit = not bit
+						bit = newbit
+
 					mask >>= 1
 
 	def send(self, train, timebase):
-		self.__event.clear()
+		self.__rxevent.clear()
+		self.__rfm.receive_stop()
+		self.__rfmlock.acquire()
 		self.__rfm.set_params(
 			Datarate = 1000.0 / timebase
 		)
-		self.__event.set()
 		self.__rfm.send(train)
+		self.__rfmlock.release()
+		self.__rxevent.set()
 
 class RcTransceiver(threading.Thread):
 	def __init__(self, module, frequency, rxcallback, statecallback = None):
@@ -964,15 +979,19 @@ class RcTransceiver(threading.Thread):
 		self.__event = threading.Event()
 		self.__trainbuf = []
 		self.daemon = True
-		self.start()
+		cb = None if rxcallback is None else self.__pushPulseTrain
+		if cb is not None:
+			self.start()
 		self.__rxcb = rxcallback
 		self.__statecb = statecallback
-		self.__rfmtrx = RfmPulseTRX(module, self.__pushPulseTrain, frequency)
+		self.__rfmtrx = RfmPulseTRX(module, cb, frequency)
 
 	def __del__(self):
 		del self.__rfmtrx
 
 	def __pushPulseTrain(self, train):
+		if len(train) < 20:
+			return
 		self.__lock.acquire()
 		self.__trainbuf.append(list(train))
 		self.__event.set()
