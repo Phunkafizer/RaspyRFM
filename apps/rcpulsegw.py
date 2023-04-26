@@ -24,6 +24,8 @@ parser.add_argument("-f", "--frequency", type=float, help=u"frequency in MHz", d
 args = parser.parse_args()
 
 script_dir = os.path.dirname(os.path.realpath(__file__))
+if not os.path.exists(script_dir + "/rcpulsegw.conf"):
+        shutil.copyfile(script_dir + "/rcpulsegw.conf.tmpl", script_dir + "/rcpulsegw.conf")
 with open(script_dir + "/rcpulsegw.conf") as jfile:
 	config = json.load(jfile)
 

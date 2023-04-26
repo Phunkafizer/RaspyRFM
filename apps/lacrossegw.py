@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import sys, time, threading, math, json, os, argparse
+import sys, time, threading, math, json, os, argparse, shutil
 from raspyrfm import *
 import sensors
 from datetime import datetime
@@ -24,6 +24,8 @@ event.set()
 rfmlock = threading.Lock()
 
 script_dir = os.path.dirname(os.path.realpath(__file__))
+if not os.path.exists(script_dir + "/lacrossegw.conf"):
+	shutil.copyfile(script_dir + "/lacrossegw.conf.tmpl", script_dir + "/lacrossegw.conf")
 with open(script_dir + "/lacrossegw.conf") as jfile:
     config = json.load(jfile)
 
@@ -69,12 +71,20 @@ try:
 
 except Exception as ex:
     influxClient = None
-    print("influx init error: " + ex.__class__.__name__ + " " + (''.join(ex.args)))
+    print("Influx Exception:", ex)
 
 try:
     import paho.mqtt.client as mqtt
     mqttClient = mqtt.Client()
-    mqttClient.connect("localhost", 1883, 60)
+    mqttClient.username_pw_set(
+        config["mqtt"]["user"] if ("mqtt" in config) and ("user" in config["mqtt"]) else "",
+        config["mqtt"]["pass"] if ("mqtt" in config) and ("pass" in config["mqtt"]) else None,
+    )
+    mqttClient.connect(
+        config["mqtt"]["server"] if ("mqtt" in config) and ("server" in config["mqtt"]) else "127.0.0.1",
+        config["mqtt"]["port"] if ("mqtt" in config) and ("port" in config["mqtt"]) else 1883,
+        30
+    )
     mqttClient.loop_start()
 except:
     mqttClient = None
