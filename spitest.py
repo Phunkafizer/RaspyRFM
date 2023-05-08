@@ -1,4 +1,4 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python
 
 import RPi.GPIO as GPIO
 import spidev
@@ -14,10 +14,10 @@ dataout = []
 for i in range(32):
 	dataout.append(random.randint(0, 255))
 
-print "Transfering testdata", dataout
+print("Transfering testdata"), dataout
 datain = spi.xfer2(dataout)
 
 if dataout == datain:
-	print "Received data OK!"
+	print("Received data OK!")
 
 spi.close()
