@@ -39,10 +39,10 @@ class RcPulse:
 				p1 = 1.0 * symlist[i]
 				p2 = 1.0 * symlist[i+1]
 
-		f = (p2-p1) / (p2+p1)
-
-		self._minwidth = self._timebase * (1 - f)
-		self._maxwidth = self._timebase * (1 + f)
+		if q > 0:
+			f = (p2-p1) / (p2+p1)
+			self._minwidth = self._timebase * (1 - f)
+			self._maxwidth = self._timebase * (1 + f)
 
 	def _reset(self):
 		self.__numbits = 0
@@ -165,6 +165,18 @@ class RcPulse:
 			pay = pay.upper()
 		return topic, pay
 
+class RcRaw(RcPulse):
+	def __init__(self, timebase):
+		self._timebase = timebase
+		self._symbols = {}
+		RcPulse.__init__(self)
+
+	def build_raw(self, pulsetrain, repetitions):
+		self._reset()
+		for p in pulsetrain:
+			self._add_pulses([round(p / self._timebase)])
+		self._add_finish()
+		return self._ookdata * repetitions
 
 class TristateBase(RcPulse): #Baseclass for old intertechno, Brennenstuhl, ...
 	def __init__(self):

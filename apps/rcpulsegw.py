@@ -69,7 +69,13 @@ apisrv = apiserver.ApiServer(p, apicb)
 
 def on_connect(client, userdata, flags, rc):
 	print("Connected with result code "+str(rc))
-	client.subscribe(MQTT_BASE_TOPIC + "/#")
+	if rc == 0:
+		client.subscribe(MQTT_BASE_TOPIC + "/#")
+	#client.connected_flag = rc == 0
+
+def on_disconnect(client, userdata, rc):
+	print("MQTT disconnected")
+	#client.connected_flag = False
 
 def on_message(client, userdata, msg):
 	tl = msg.topic.split("/")
@@ -83,18 +89,21 @@ def on_message(client, userdata, msg):
 
 
 if mqttClient:
+	mqttClient.connected_flag = False
+	mqttClient.loop_start()
 	mqttClient.on_connect = on_connect
+	mqttClient.on_disconnect = on_disconnect
 	mqttClient.on_message = on_message
 	mqttClient.username_pw_set(
 		config["mqtt"]["user"] if ("mqtt" in config) and ("user" in config["mqtt"]) else "",
 		config["mqtt"]["pass"] if ("mqtt" in config) and ("pass" in config["mqtt"]) else None,
 	)
-	mqttClient.connect(
-		config["mqtt"]["server"] if ("mqtt" in config) and ("server" in config["mqtt"]) else "127.0.0.1",
-		config["mqtt"]["port"] if ("mqtt" in config) and ("port" in config["mqtt"]) else 1883,
-		30
-	)
-	mqttClient.loop_start()
+	server = config["mqtt"]["server"] if ("mqtt" in config) and ("server" in config["mqtt"]) else "127.0.0.1"
+	port = config["mqtt"]["port"] if ("mqtt" in config) and ("port" in config["mqtt"]) else 1883
+	try:
+		mqttClient.connect(server, port, 30)
+	except:
+		pass
 
 while True:
 	time.sleep(1)

@@ -112,6 +112,7 @@ class BaudChanger(threading.Thread):
         i = 0
         while True:
             time.sleep(15)
+            event.clear()
             rfm.receive_stop()
             i += 1
             if i == len(baudrates):
@@ -122,6 +123,7 @@ class BaudChanger(threading.Thread):
             rfmlock.acquire()
             rfm.set_params(Datarate = bd)
             rfmlock.release()
+            event.set()
 
 baudChanger = BaudChanger()
 
@@ -268,15 +270,14 @@ server_thread.start()
 p = config["apiport"] if "apiport" in config else 1991
 apisrv = apiserver.ApiServer(p)
 
-print("Waiting for sensors...")
-
 while 1:
+    event.wait()
     rfmlock.acquire()
-    rxObj = rfm.receive(7)
+    rxData = rfm.receive(7)
     rfmlock.release()
 
     try:
-        sensorObj = sensors.rawsensor.CreateSensor(rxObj)
+        sensorObj = sensors.rawsensor.CreateSensor(rxData)
         sensorData = sensorObj.GetData()
         payload = {}
         id = sensorData["ID"]
@@ -286,8 +287,8 @@ while 1:
     except:
         continue
 
-    payload["rssi"] = rxObj[1]
-    payload["afc"] = rxObj[2]
+    payload["rssi"] = rxData[1]
+    payload["afc"] = rxData[2]
     payload["batlo"] = sensorData['batlo']
     payload["init"] = sensorData["init"]
     lock.acquire()
@@ -355,8 +356,8 @@ while 1:
         line += 'RH: -- %|'
     line += "battery: " + ("LOW" if payload["batlo"] else "OK ") + "|"
     line += "init: " + ("1" if payload["init"] else "0") + "|"
-    line += "RSSI: {:6.1f} dBm|".format(rxObj[1])
-    line += "FEI: {:5.1f} kHz|".format(rxObj[3] * rfm69.FSTEP / 1000)
+    line += "RSSI: {:6.1f} dBm|".format(rxData[1])
+    line += "FEI: {:5.1f} kHz|".format(rxData[3] * rfm69.FSTEP / 1000)
     print(line)
     lock.release()
 
