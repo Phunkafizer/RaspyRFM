@@ -68,18 +68,20 @@ try:
         influxClient.create_continuous_query("three_hour", 'SELECT mean(T) as "T", mean(RH) as "RH", mean(AH) as "AH", mean(DEW) as "DEW" INTO "one_week"."lacrosse" from "lacrosse" GROUP BY time(3h),*')
     else:
         influxClient.switch_database(config["influxdb"]["database"])
+    print("influxdb1 client loaded")
+
 
 except Exception as ex:
     influxClient = None
     print("InfluxDB1 Exception:", ex)
 
 try:
-        import influxdb_client
-        from influxdb_client import InfluxDBClient, Point, WritePrecision
-        from influxdb_client.client.write_api import SYNCHRONOUS
-        influxClient2 = influxdb_client.InfluxDBClient(url=config["influxdb2"]["url"], token=config["influxdb2"]["token"], org=config["influxdb2"]["org"])
-        influxapi = influxClient2.write_api(write_options=SYNCHRONOUS)
-        print("influx client 2 loaded")
+    import influxdb_client
+    from influxdb_client import InfluxDBClient, Point, WritePrecision
+    from influxdb_client.client.write_api import SYNCHRONOUS
+    influxClient2 = influxdb_client.InfluxDBClient(url=config["influxdb2"]["url"], token=config["influxdb2"]["token"], org=config["influxdb2"]["org"])
+    influxapi = influxClient2.write_api(write_options=SYNCHRONOUS)
+    print("influxdb2 client loaded")
 except Exception as ex:
     influxClient2 = None
     print("InfluxDB2 Exception:", ex)
@@ -138,36 +140,6 @@ class BaudChanger(threading.Thread):
             event.set()
 
 baudChanger = BaudChanger()
-
-def writeInflux(payload):
-    if influxClient:
-        T = payload["T"]
-        wr = {
-            "measurement": "lacrosse",
-            "fields": {
-                "T": T
-            },
-            "tags": {"sensor": payload["id"] if not ("room" in payload) else payload["room"]}
-        }
-
-        if "RH" in payload:
-            wr["fields"]["RH"] = payload["RH"]
-            wr["fields"]["DEW"] = payload["DEW"]
-            wr["fields"]["AH"] = payload["AH"]
-        influxClient.write_points([wr])
-
-    if influxClient2:
-        point = (
-            Point(config["influxdb2"]["measurement"])
-            .tag("sensor", payload["id"] if not ("room" in payload) else payload["room"])
-            .field("T", T)
-        )
-        if "RH" in payload:
-            point.field("RH", payload["RH"])
-            point.field("DEW", payload["DEW"])
-            point.field("AH", payload["AH"])
-
-        influxapi.write(bucket=config["influxdb2"]["bucket"], org=config["influxdb2"]["org"], record=point)
 
 def getCacheSensor(id, sensorConfig = None):
     sensor = None
@@ -384,14 +356,45 @@ while 1:
     print(line)
     lock.release()
 
-    try:
-        if influxClient:
-            writeInflux(payload)
-    except Exception as ex:
-        print("Error writing to influx", ex)
+    if influxClient:
+        try:
+            T = payload["T"]
+            wr = {
+                "measurement": "lacrosse",
+                "fields": {
+                    "T": T
+                },
+                "tags": {"sensor": payload["id"] if not ("room" in payload) else payload["room"]}
+            }
 
-    try:
-        if mqttClient:
+            if "RH" in payload:
+                wr["fields"]["RH"] = payload["RH"]
+                wr["fields"]["DEW"] = payload["DEW"]
+                wr["fields"]["AH"] = payload["AH"]
+            influxClient.write_points([wr])
+
+        except Exception as ex:
+            print("Error writing to influxdb1:", ex)
+
+    if influxClient2:
+        try:
+            point = (
+                Point(config["influxdb2"]["measurement"])
+                .tag("sensor", payload["id"] if not ("room" in payload) else payload["room"])
+                .field("T", T)
+            )
+            if "RH" in payload:
+                point.field("RH", payload["RH"])
+                point.field("DEW", payload["DEW"])
+                point.field("AH", payload["AH"])
+
+            influxapi.write(bucket=config["influxdb2"]["bucket"], org=config["influxdb2"]["org"], record=point)
+
+        except Exception as ex:
+            print("Error writing to influxdb2:", ex)
+
+    if mqttClient:
+        try:
             mqttClient.publish('home/lacrosse/'+ payload['id'], json.dumps(payload))
-    except:
-        print("Error writing to MQTT!")
+        except:
+            print("Error writing to MQTT!")
