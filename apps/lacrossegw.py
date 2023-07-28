@@ -360,7 +360,7 @@ while 1:
         try:
             T = payload["T"]
             wr = {
-                "measurement": "lacrosse",
+                "measurement": config["influxdb"]["measurement"] if "measurement" in config["influxdb"] else "lacrosse",
                 "fields": {
                     "T": T
                 },
