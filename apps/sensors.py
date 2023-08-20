@@ -69,6 +69,8 @@ class lacross(rawsensor):
         def Create(data):
                 if (len(data[0]) < 5) or (crc8(data[0]) != 0):
                     return
+                if data[0][0] & 0xF0 != 0x90:
+                    return
                 if (data[0][1] & 0x0F > 9) or (data[0][2] >> 4 > 9) or (data[0][2] & 0x0F > 9):
                     return
                 return lacross(data)
