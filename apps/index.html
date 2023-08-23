@@ -401,12 +401,9 @@
                         var ctxPlugin = chart.chart.ctx;
                         var xAxe = chart.scales[chart.config.options.scales.xAxes[0].id];
                         var yAxe = chart.scales[chart.config.options.scales.yAxes[0].id];
-                        if (yAxe.min != 0)
-                            return;
                         ctxPlugin.strokeStyle = "#FE0";
-                        ctxPlugin.strokeWidth = 3;
                         ctxPlugin.beginPath();
-                        lineAt = (chart.data.tOutside - yAxe.min) * (100 / yAxe.max);
+                        lineAt = (chart.data.tOutside - yAxe.min) * (100 / (yAxe.max - yAxe.min));
                         lineAt = (100 - lineAt) / 100 * (yAxe.height) + yAxe.top;
                         ctxPlugin.moveTo(xAxe.left, lineAt);
                         ctxPlugin.lineTo(xAxe.right, lineAt);
@@ -459,12 +456,9 @@
                         var ctxPlugin = chart.chart.ctx;
                         var xAxe = chart.scales[chart.config.options.scales.xAxes[0].id];
                         var yAxe = chart.scales[chart.config.options.scales.yAxes[0].id];
-                        if (yAxe.min != 0)
-                            return;
                         ctxPlugin.strokeStyle = "#FE0";
-                        ctxPlugin.strokeWidth = 3;
                         ctxPlugin.beginPath();
-                        lineAt = (chart.data.ahOutside - yAxe.min) * (100 / yAxe.max);
+                        lineAt = (chart.data.ahOutside - yAxe.min) * (100 / (yAxe.max - yAxe.min));
                         lineAt = (100 - lineAt) / 100 * (yAxe.height) + yAxe.top;
                         ctxPlugin.moveTo(xAxe.left, lineAt);
                         ctxPlugin.lineTo(xAxe.right, lineAt);
