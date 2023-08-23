@@ -73,6 +73,10 @@
             color: silver;
             padding-left: 0.5em;
         }
+
+        #tempChart {
+            height: 150px;
+        }
     </style>
 
     <title>Raumklima</title>
@@ -83,6 +87,7 @@
         <hr/>
         <div id="detailrow" class="row"></div>
         <div class="row"><canvas id="myChart"></canvas></div>
+        <div class="row"><canvas id="tempChart"></canvas></div>
         <div class="row"><canvas id="ahChart"></canvas></div>
     </div>
   </body>
@@ -90,7 +95,28 @@
 
 <script>
     var 
-        detailId = null;
+        detailId = null,
+        tempChartData = {
+            labels: [],
+            datasets: [
+                {
+                    label: 'T',
+                    backgroundColor: [],
+                    data: []
+                }
+            ]
+        },
+        humChartData = {
+            labels: [],
+            datasets: [
+                {
+                    label: 'AH',
+                    backgroundColor: [],
+                    data: [],
+                    barPercentage: 0.5
+                }
+            ]
+        };
     
     function drawDetails(sensor) {
         function createMeasure(name, field, unit, valadd="") {
@@ -119,7 +145,6 @@
                     .append(createMeasure("Taupunkt", "DEW", "°C"))
                     .append(createMeasure("TF80", "DEW80", "°C"))
                     .append(createMeasure("TF60", "DEW60", "°C"))
-                    .append($("<button>").attr('type', 'button').addClass('btn btn-primary btn-sm').text('setup'))
                 )
             );
     }
@@ -202,25 +227,18 @@
 
     function loadValues() {
         $.getJSON("/data", function(data) {
-            var humData = {
-                labels: [],
-                datasets: [
-                    {
-                        label: 'RH',
-                        backgroundColor: [],
-                        data: [],
-                        barPercentage: 0.8
-                    },
-                    {
-                        label: 'RHvent',
-                        backgroundColor: '#669',
-                        data: [],
-                        barPercentage: 0.2
-                    }
-                ]
-            };
-
             $("#sensorrow").empty();
+
+            tempChartData.labels = [];
+            tempChartData.datasets[0].data = [];
+            tempChartData.datasets[0].backgroundColor = [];
+            tempChartData.tOutside = null;
+
+            humChartData.labels = [];
+            humChartData.datasets[0].data = [];
+            humChartData.datasets[0].backgroundColor = [];
+            humChartData.ahOutside = null;
+            
             $.each(data["sensors"], function(idx, val) {
                 let t = 'T' in val ? val["T"] : '---';
                 let rh = ('RH' in val) ? val["RH"] : '---';
@@ -262,26 +280,48 @@
                                 )
                             )
                         )
-                    ); 
+                    );
 
-                if (val["RHvent"] !== undefined) {
-                    humData.labels.push(val['room']);
-                    humData.datasets[0].data.push(val['RH']);
+
+                tempChartData.labels.push(val['room']);
+                humChartData.labels.push(val['room']);
+                tempChartData.datasets[0].data.push(val['T']);
+                switch (val["tStatus"]) {
+                    case 'high':
+                    case 'low':
+                        tempChartData.datasets[0].backgroundColor.push('#A00'); 
+                        break;
+                    case 'ok':
+                        tempChartData.datasets[0].backgroundColor.push('#394'); 
+                        break;
+                    default:
+                        tempChartData.datasets[0].backgroundColor.push('#888'); 
+                        break;
+                }
+
+                if (val["isOutside"] === true)
+                        tempChartData.tOutside = val['T'];
+
+                if (val["AH"] !== undefined)
+                    humChartData.datasets[0].data.push(val['AH']);
                     switch (val["rhStatus"]) {
                         case 'high':
                         case 'low':
-                            humData.datasets[0].backgroundColor.push('#A00'); 
+                            humChartData.datasets[0].backgroundColor.push('#A00'); 
                             break;
                         case 'ok':
-                            humData.datasets[0].backgroundColor.push('#394'); 
+                            humChartData.datasets[0].backgroundColor.push('#394'); 
                             break;
                         default:
-                            humData.datasets[0].backgroundColor.push('#444'); 
+                            humChartData.datasets[0].backgroundColor.push('#888'); 
                             break;
                     }  
-                    humData.datasets[1].data.push(val['RHvent']);
-                }
+                    if (val["isOutside"] === true)
+                        humChartData.ahOutside = val['AH'];
             });
+
+            ahChart.update();
+            tempChart.update();
 
             $("div.sensor")
                 .click(function() {
@@ -298,37 +338,118 @@
                         return false;
                     }
                 });
-
-            var ctx2 = $("#ahChart");
-            var chart2 = new Chart(ctx2, {
-                type: 'bar',
-                data: humData,
-                options: {
-                    scales: {
-                        yAxes: [
-                            {
-                                position: 'left',
-                                id: 'yax1',
-                                ticks: {
-                                    suggestedMin: 0,
-                                    suggestedMax: 80
-                                },
-                                scaleLabel: {
-                                    display: true,
-                                    labelString: 'RH / %'
-                                }
-                            }
-                        ]
-                    },
-                    animation: {
-                        duration: 0
-                    }
-                }
-            });
         });
     }
 
     $(function() {
+        tempChart = new Chart($("#tempChart"), {
+            type: 'bar',
+            data: tempChartData,
+            options: {
+                scales: {
+                    yAxes: [
+                        {
+                            position: 'left',
+                            id: 'yax1',
+                            gridLines: {
+                                color: '#444',
+                                borderDash: [8, 4]
+                            },
+                            ticks: {
+                                suggestedMin: 0,
+                                suggestedMax: 30
+                            },
+                            scaleLabel: {
+                                display: true,
+                                labelString: 'T °C'
+                            }
+                        }
+                    ]
+                },
+                animation: {
+                    duration: 500
+                },
+                legend: {
+                    display: false
+                }
+            },
+            plugins: [
+                {
+                    afterDraw: function(chart) {
+                        if (chart.data.tOutside === null)
+                            return;
+                        var ctxPlugin = chart.chart.ctx;
+                        var xAxe = chart.scales[chart.config.options.scales.xAxes[0].id];
+                        var yAxe = chart.scales[chart.config.options.scales.yAxes[0].id];
+                        if (yAxe.min != 0)
+                            return;
+                        ctxPlugin.strokeStyle = "#FE0";
+                        ctxPlugin.strokeWidth = 3;
+                        ctxPlugin.beginPath();
+                        lineAt = (chart.data.tOutside - yAxe.min) * (100 / yAxe.max);
+                        lineAt = (100 - lineAt) / 100 * (yAxe.height) + yAxe.top;
+                        ctxPlugin.moveTo(xAxe.left, lineAt);
+                        ctxPlugin.lineTo(xAxe.right, lineAt);
+                        ctxPlugin.stroke();
+                    }
+                }
+            ]
+        });
+
+        ahChart = new Chart($("#ahChart"), {
+            type: 'bar',
+            data: humChartData,
+            options: {
+                scales: {
+                    yAxes: [
+                        {
+                            position: 'left',
+                            id: 'yax2',
+                            gridLines: {
+                                color: '#444',
+                                borderDash: [8, 4]
+                            },
+                            ticks: {
+                                suggestedMin: 0,
+                                suggestedMax: 25
+                            },
+                            scaleLabel: {
+                                display: true,
+                                labelString: 'AH g / m³'
+                            }
+                        }
+                    ]
+                },
+                animation: {
+                    duration: 500
+                },
+                legend: {
+                    display: false
+                }
+            },
+            plugins: [
+                {
+                    afterDraw: function(chart) {
+                        if (chart.data.ahOutside === null)
+                            return;
+                        var ctxPlugin = chart.chart.ctx;
+                        var xAxe = chart.scales[chart.config.options.scales.xAxes[0].id];
+                        var yAxe = chart.scales[chart.config.options.scales.yAxes[0].id];
+                        if (yAxe.min != 0)
+                            return;
+                        ctxPlugin.strokeStyle = "#FE0";
+                        ctxPlugin.strokeWidth = 3;
+                        ctxPlugin.beginPath();
+                        lineAt = (chart.data.ahOutside - yAxe.min) * (100 / yAxe.max);
+                        lineAt = (100 - lineAt) / 100 * (yAxe.height) + yAxe.top;
+                        ctxPlugin.moveTo(xAxe.left, lineAt);
+                        ctxPlugin.lineTo(xAxe.right, lineAt);
+                        ctxPlugin.stroke();
+                    }
+                }
+            ]
+        });
+        
         loadValues();
         
         setInterval(function() {

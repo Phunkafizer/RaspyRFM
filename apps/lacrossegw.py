@@ -155,6 +155,9 @@ def getCacheSensor(id, sensorConfig = None):
             if ('tStatus' not in sensor) and ('tMax' in sensorConfig or 'tMin' in sensorConfig):
                 sensor["tStatus"] = "ok"
 
+            if ('isOutside' in sensorConfig):
+                sensor["isOutside"] = sensorConfig['isOutside']
+
             if ('RH' in sensor):
                 outSensor = getCacheSensor(sensorConfig["idOutside"]) if 'idOutside' in sensorConfig else None
                 if (outSensor is not None) and ('AH' in outSensor):
