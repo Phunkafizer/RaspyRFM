@@ -282,6 +282,28 @@ while 1:
         payload["id"] = id
         T = sensorData["T"][0]
         payload["T"] = T
+        if 'RH' in sensorData:
+            RH = int(sensorData['RH'][0])
+            payload["RH"] = RH
+            a = 7.5
+            b = 237.4
+            SDD = 6.1078 * 10**(a*T/(b+T))
+
+            DD = RH / 100.0 * SDD
+            v = math.log10(DD/6.1078)
+            payload["DEW"] = round(b*v/(a-v), 1)
+            payload["AH"] = round(10**5 * 18.016/8314.3 * DD/(T+273.15), 1)
+            payload["SDD"] = SDD
+            payload["DD"] = DD
+
+            DD = RH / 80.0 * SDD
+            v = math.log10(DD/6.1078)
+            payload["DEW80"] = round(b*v/(a-v), 1)
+
+            DD = RH / 60.0 * SDD
+            v = math.log10(DD/6.1078)
+            payload["DEW60"] = round(b*v/(a-v), 1)
+
     except:
         continue
 
@@ -294,28 +316,6 @@ while 1:
         if id == csens["id"]:
             payload["room"] = csens["name"]
             break
-
-    if 'RH' in sensorData:
-        RH = int(sensorData['RH'][0])
-        payload["RH"] = RH
-        a = 7.5
-        b = 237.4
-        SDD = 6.1078 * 10**(a*T/(b+T))
-
-        DD = RH / 100.0 * SDD
-        v = math.log10(DD/6.1078)
-        payload["DEW"] = round(b*v/(a-v), 1)
-        payload["AH"] = round(10**5 * 18.016/8314.3 * DD/(T+273.15), 1)
-        payload["SDD"] = SDD
-        payload["DD"] = DD
-
-        DD = RH / 80.0 * SDD
-        v = math.log10(DD/6.1078)
-        payload["DEW80"] = round(b*v/(a-v), 1)
-
-        DD = RH / 60.0 * SDD
-        v = math.log10(DD/6.1078)
-        payload["DEW60"] = round(b*v/(a-v), 1)
 
     apipayl = {
         "decode": [{
@@ -332,6 +332,9 @@ while 1:
         cache[id]["payload"] = payload
         cache[id]["payload"]["tMin"] = T
         cache[id]["payload"]["tMax"] = T
+        if "RH" in payload:
+            cache[id]["payload"]["rhMin"] = RH
+            cache[id]["payload"]["rhMax"] = RH
     else:
         payload["tMin"] = cache[id]["payload"]["tMin"]
         payload["tMax"] = cache[id]["payload"]["tMax"]
@@ -339,6 +342,14 @@ while 1:
             payload["tMin"] = T
         if payload["tMax"] < T:
             payload["tMax"] = T
+        if "RH" in payload:
+            payload["rhMin"] = cache[id]["payload"]["rhMin"]
+            payload["rhMax"] = cache[id]["payload"]["rhMax"]
+            if payload["rhMin"] > RH:
+                payload["rhMin"] = RH
+            if payload["rhMax"] < RH:
+                payload["rhMax"] = RH
+
 
         cache[id]["payload"] = payload
 

@@ -21,6 +21,14 @@
         body {
             background-color: #161719;
         }
+
+        #offlineHint {
+            display: none;
+            background-color: red;
+            text-align: center;
+            padding: 2px;
+        }
+
         .container {
             margin-top: 1em;
         }
@@ -82,6 +90,7 @@
     <title>Raumklima</title>
   </head>
   <body>
+    <div id="offlineHint"><span>Offline!</span></div>
     <div id="grid" class="container">
         <div id="sensorrow" class="row"></div>
         <hr/>
@@ -112,8 +121,7 @@
                 {
                     label: 'AH',
                     backgroundColor: [],
-                    data: [],
-                    barPercentage: 0.5
+                    data: []
                 }
             ]
         };
@@ -138,8 +146,12 @@
             .html($("<div>").addClass("sensorpanel col-12")
                 .append($("<div>").addClass("sensor row")
                     .append(createMeasure("ID", "id", ""))
-                    .append(createMeasure("Temp.", "T", "°C"))
+                    .append(createMeasure("T", "T", "°C"))
+                    .append(createMeasure("Tmin", "tMin", "°C"))
+                    .append(createMeasure("Tmax", "tMax", "°C"))
                     .append(createMeasure("RH", "RH", "%"))
+                    .append(createMeasure("RHmin", "rhMin", "%"))
+                    .append(createMeasure("RHmax", "rhMax", "%"))
                     .append(createMeasure("AH", "AH", "g/m³"))
                     .append(createMeasure("AHratio", "AHratio", "%"))
                     .append(createMeasure("Taupunkt", "DEW", "°C"))
@@ -298,26 +310,24 @@
                         tempChartData.datasets[0].backgroundColor.push('#888'); 
                         break;
                 }
-
                 if (val["isOutside"] === true)
                         tempChartData.tOutside = val['T'];
 
-                if (val["AH"] !== undefined)
-                    humChartData.datasets[0].data.push(val['AH']);
-                    switch (val["rhStatus"]) {
-                        case 'high':
-                        case 'low':
-                            humChartData.datasets[0].backgroundColor.push('#A00'); 
-                            break;
-                        case 'ok':
-                            humChartData.datasets[0].backgroundColor.push('#394'); 
-                            break;
-                        default:
-                            humChartData.datasets[0].backgroundColor.push('#888'); 
-                            break;
-                    }  
-                    if (val["isOutside"] === true)
-                        humChartData.ahOutside = val['AH'];
+                humChartData.datasets[0].data.push(val['AH']);
+                switch (val["rhStatus"]) {
+                    case 'high':
+                    case 'low':
+                        humChartData.datasets[0].backgroundColor.push('#A00'); 
+                        break;
+                    case 'ok':
+                        humChartData.datasets[0].backgroundColor.push('#394'); 
+                        break;
+                    default:
+                        humChartData.datasets[0].backgroundColor.push('#888'); 
+                        break;
+                }  
+                if (val["isOutside"] === true)
+                    humChartData.ahOutside = val['AH'];
             });
 
             ahChart.update();
@@ -338,7 +348,12 @@
                         return false;
                     }
                 });
-        });
+
+            $("#offlineHint").hide();
+        })
+            .fail(function() {
+                $("#offlineHint").show();
+            });
     }
 
     $(function() {
@@ -347,6 +362,11 @@
             data: tempChartData,
             options: {
                 scales: {
+                    xAxes: [
+                        {
+                            categoryPercentage: 0.4
+                        }
+                    ],
                     yAxes: [
                         {
                             position: 'left',
@@ -401,10 +421,14 @@
             data: humChartData,
             options: {
                 scales: {
+                    xAxes: [
+                        {
+                            categoryPercentage: 0.4
+                        }
+                    ],
                     yAxes: [
                         {
                             position: 'left',
-                            id: 'yax2',
                             gridLines: {
                                 color: '#444',
                                 borderDash: [8, 4]
