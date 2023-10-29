@@ -321,7 +321,6 @@ while 1:
             point = (
                 Point(measurement)
                 .tag("sensor", payload["id"] if not ("room" in payload) else payload["room"])
-                .field("T", T)
             )
             val = sensor.getDbValues()
             for key in val:
@@ -334,7 +333,10 @@ while 1:
 
     if mqttClient:
         try:
-            topic = config["mqtt"]["basetopic"] if "basetopic" in config["mqtt"] else "home"
+            if "mqtt" in config and "basetopic" in config["mqtt"]:
+                topic = config["mqtt"]["basetopic"]
+            else:
+                topic = "home"
             topic += "/" + sensor.getClass() + "/" + payload['id']
             mqttClient.publish(topic, json.dumps(payload))
         except:
