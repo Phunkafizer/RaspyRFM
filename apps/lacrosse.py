@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 from raspyrfm import *
+import rfmparam
 import sensors
-from sensors import rawsensor
 import sys, time, threading, argparse
 
 rfm = None
@@ -26,52 +26,34 @@ if rfm == None:
 	exit()
 
 rfm.set_params(
-	Freq = 868.30, #MHz center frequency
-	Datarate = 9.579, #kbit/s baudrate
+	Freq = 868.30, # MHz center frequency
 	ModulationType = rfm69.FSK, #modulation
-	SyncPattern = [0x2d, 0xd4], #syncword
-	Bandwidth = 200, #kHz bandwidth
+	Datarate = 9.579, # kbit/s baudrate
+	SyncPattern = [0x2d, 0xd4],
+	Bandwidth = 250, #kHz bandwidth
 	RssiThresh = -110, #dBm RSSI threshold
 )
 
-class BaudChanger(threading.Thread):
-	def __init__(self):
-		threading.Thread.__init__(self)
-		self.daemon = True
-		self.start()
-
-	def run(self):
-		baudrates = [9.579, 17.241]
-		i = 0
-		while True:
-			time.sleep(15)
-			event.clear()
-			rfm.receive_stop()
-
-			i += 1
-			if i == len(baudrates):
-				i = 0
-			bd = baudrates[i]
-
-			print("Switch baudrate to " + str(bd) + " kbit/s")
-			mutex.acquire()
-			rfm.set_params(Datarate = bd)
-			mutex.release()
-			event.set()
-
-baudChanger = BaudChanger()
+paramChanger = rfmparam.ParamChanger(rfm, event, mutex,
+    [
+        rfmparam.PARAM_TX35,
+        rfmparam.PARAM_TX29,
+        #rfmparam.PARAM_BRESSER,
+        #rfmparam.PARAM_EC3K
+    ]
+)
 
 while 1:
 	event.wait()
 	mutex.acquire()
-	data = rfm.receive(7)
+	rxdata = rfm.receive(paramChanger.rxLen())
 	mutex.release()
-	if data == None:
-		print("---")
+
+	if rxdata == None:
 		continue
 
-	obj = rawsensor.CreateSensor(data).GetData()
-	if not 'ID' in obj:
-		continue
-
-	print(obj)
+	obj = sensors.decode(rxdata)
+	if obj:
+		print(obj)
+	else:
+		print('<unknown>', rxdata)

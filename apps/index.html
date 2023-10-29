@@ -127,9 +127,15 @@
         };
     
     function drawDetails(sensor) {
-        function createMeasure(name, field, unit, valadd="") {
-            var v = sensor.hasOwnProperty(field) ? sensor[field] : "---";
-            return $("<div>").addClass("col-4 col-sm-3 col-md-2 col-lg-1")
+        function createMeasure(name, field, unit, tooltip="", toFixed = null) {
+            var v = "---";
+            if (sensor.hasOwnProperty(field)) {
+                v = sensor.hasOwnProperty(field) ? sensor[field] : "---";
+                if (toFixed)
+                    v = v.toFixed(toFixed)
+            }
+            return $("<div>")
+                .addClass("col-4 col-sm-3 col-md-2 col-lg-1")
                 .append($("<div>").addClass("sensorheader d-flex justify-content-between")
                     .append($("<div>")
                         .addClass('sensortitle')
@@ -139,24 +145,28 @@
                 .append($("<div>").addClass("measure d-flex justify-content-between")
                     .append($("<span>").addClass("measurevalue").text(v))
                     .append($("<span>").addClass("measureunit").text(unit))
-                );
+                )
+                .prop('title', tooltip);
         }
 
         $("#detailrow")
             .html($("<div>").addClass("sensorpanel col-12")
                 .append($("<div>").addClass("sensor row")
                     .append(createMeasure("ID", "id", ""))
-                    .append(createMeasure("T", "T", "°C"))
-                    .append(createMeasure("Tmin", "tMin", "°C"))
-                    .append(createMeasure("Tmax", "tMax", "°C"))
-                    .append(createMeasure("RH", "RH", "%"))
-                    .append(createMeasure("RHmin", "rhMin", "%"))
-                    .append(createMeasure("RHmax", "rhMax", "%"))
-                    .append(createMeasure("AH", "AH", "g/m³"))
+                    .append(createMeasure("T", "T", "°C", "Temperatur"))
+                    .append(createMeasure("Tmin", "T_min", "°C"))
+                    .append(createMeasure("Tmax", "T_max", "°C"))
+                    .append(createMeasure("RH", "RH", "%", "rel. Luftfeuchtigkeit"))
+                    .append(createMeasure("RHmin", "RH_min", "%"))
+                    .append(createMeasure("RHmax", "RH_max", "%"))
+                    .append(createMeasure("AH", "AH", "g/m³", "Absolute Luftfeuchtigkeit"))
                     .append(createMeasure("AHratio", "AHratio", "%"))
                     .append(createMeasure("Taupunkt", "DEW", "°C"))
-                    .append(createMeasure("TF80", "DEW80", "°C"))
-                    .append(createMeasure("TF60", "DEW60", "°C"))
+                    .append(createMeasure("TF80", "TH80", "°C"))
+                    .append(createMeasure("TF60", "TH60", "°C"))
+                    .append(createMeasure("aw", "aw", "%", "Oberflächenfeuchtigkeit", 0))
+                    .append(createMeasure("SDD", "SVP", "hPa", "Sättingsdampfdruck", 1))
+                    .append(createMeasure("DD", "VP", "hPa", "Dampfdruck", 1))
                 )
             );
     }
@@ -277,6 +287,7 @@
                                     .append($("<span>").addClass('material-icons').text(val["window"] == 'open' ? 'cloud_queue' : ''))
                                     .append($("<span>").addClass('material-icons').text(val["window"] == 'close' ? 'cloud_off' : ''))
                                     .append($("<span>").addClass('material-icons text-warning').text(val["init"] ? 'fiber_new' : ''))
+                                    .append($("<span>").addClass('material-icons text-danger').text(val["awStatus"] == 'high' ? 'grain' : ''))
                                 )
                             )
                             .append($("<div>").addClass("measures d-flex")

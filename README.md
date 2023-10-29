@@ -14,9 +14,6 @@ pip install -e .
 emulate a gateway for controlling RC sockets via the app power-switch. Compatible to "Brennenstuhl Brematic", Intertechno "ITGW-433", "ConnAir"
 Here you find a python client controlling this gateway: https://github.com/markusressel/raspyrfm-client 
 
-## apps/emoncms.py
-receive lacrosse-sensors with the RaspyRFM and post them to the open energy monitor, see https://openenergymonitor.org/
-
 ## Receive and send 433 MHz RC remote controls
 ```sh
 apps/rcpulse.py
@@ -35,10 +32,12 @@ apps/rcpulse -f 868.35
 apps/rcpulsegw.py
 ```
 
-## lacrosse.py
-receiving lacrosse temperature sensors IT29-T, IT35-T, ...
+## 868gw.py
+receiving lacrosse temperature sensors IT29-T, IT35-T, EC3000, Bresser7in1, ...
+write values to Influx, MQTT, ...
+Visualize in webUI
 ```sh
-apps/lacrosse.py
+apps/868gw.py
 RFM69 found on CS 1
 INIT COMPLETE
 Waiting for sensors...
@@ -48,9 +47,6 @@ La crosse {'batlo': False, 'AFC': 14, 'init': False, 'T': (20.5, 'C'), 'RSSI': -
 La crosse {'batlo': False, 'AFC': 308, 'init': False, 'T': (19.5, 'C'), 'RSSI': -103, 'RH': (60, '%'), 'ID': '68'}
 La crosse {'batlo': False, 'AFC': 376, 'init': False, 'T': (19.7, 'C'), 'RSSI': -103, 'RH': (57, '%'), 'ID': '24'}
 ```
-
-## lacrosse gateway apps/lacrossegw.py 
-receive lacrosse sensor, visualize in webinterface, save to influxDB
 
 ## Product
 [Module RaspbyRFM Seegel Systeme](http://www.seegel-systeme.de/produkt/raspyrfm-ii/)

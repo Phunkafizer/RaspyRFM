@@ -1,5 +1,5 @@
 [Unit]
-Description=RaspyRFM la crosse gateway
+Description=RaspyRFM 868 MHz gateway
 After=network.target
 StartLimitIntervalSec=0
 
@@ -8,7 +8,7 @@ Type=simple
 Restart=always
 RestartSec=10
 User=pi
-ExecStart=/home/pi/dev/rfmgithub/apps/lacrossegw.py
+ExecStart=/home/pi/RaspyRFM/apps/868gw.py
 StandardOutput=null
 StandardError=journal
 

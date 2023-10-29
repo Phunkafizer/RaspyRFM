@@ -6,6 +6,8 @@ from raspyrfm import *
 import sensors
 from datetime import datetime
 import apiserver
+import climatools
+import rfmparam
 
 try:
     #python2.7
@@ -24,9 +26,12 @@ event.set()
 rfmlock = threading.Lock()
 
 script_dir = os.path.dirname(os.path.realpath(__file__))
-if not os.path.exists(script_dir + "/lacrossegw.conf"):
-	shutil.copyfile(script_dir + "/lacrossegw.conf.tmpl", script_dir + "/lacrossegw.conf")
-with open(script_dir + "/lacrossegw.conf") as jfile:
+if not os.path.exists(script_dir + "/868gw.conf"):
+	if os.path.exists(script_dir + "/lacrossegw.conf"):
+		shutil.move(script_dir + "/lacrossegw.conf", script_dir + "/868gw.conf")
+	else:
+		shutil.copyfile(script_dir + "/868gw.conf.tmpl", script_dir + "/868gw.conf")
+with open(script_dir + "/868gw.conf") as jfile:
     config = json.load(jfile)
 
 parser = argparse.ArgumentParser()
@@ -53,23 +58,8 @@ try:
         password=config["influxdb"]["pass"]
     )
 
-    createDb = True
-    for db in influxClient.get_list_database():
-        if db["name"] == config["influxdb"]["database"]:
-            createDb = False
-            break
-    if createDb:
-        influxClient.create_database(config["influxdb"]["database"])
-        influxClient.switch_database(config["influxdb"]["database"])
-        influxClient.alter_retention_policy("autogen", duration="2h", replication=1, shard_duration="1h")
-        influxClient.create_retention_policy("one_week", duration="1w", replication=1, shard_duration='24h')
-        influxClient.create_retention_policy("one_year", database=config["influxdb"]["database"], duration="365d", replication=1, shard_duration='1w')
-        influxClient.create_continuous_query("three_min", 'SELECT mean(T) as "T", mean(RH) as "RH", mean(AH) as "AH", mean(DEW) as "DEW" INTO "one_week"."lacrosse" from "lacrosse" GROUP BY time(3m),*')
-        influxClient.create_continuous_query("three_hour", 'SELECT mean(T) as "T", mean(RH) as "RH", mean(AH) as "AH", mean(DEW) as "DEW" INTO "one_week"."lacrosse" from "lacrosse" GROUP BY time(3h),*')
-    else:
-        influxClient.switch_database(config["influxdb"]["database"])
-    print("influxdb1 client loaded")
-
+    influxClient.switch_database(config["influxdb"]["database"])
+    print("InfluxDB1 client loaded")
 
 except Exception as ex:
     influxClient = None
@@ -81,7 +71,7 @@ try:
     from influxdb_client.client.write_api import SYNCHRONOUS
     influxClient2 = influxdb_client.InfluxDBClient(url=config["influxdb2"]["url"], token=config["influxdb2"]["token"], org=config["influxdb2"]["org"])
     influxapi = influxClient2.write_api(write_options=SYNCHRONOUS)
-    print("influxdb2 client loaded")
+    print("InfluxDB2 client loaded")
 except Exception as ex:
     influxClient2 = None
     print("InfluxDB2 Exception:", ex)
@@ -115,31 +105,14 @@ rfm.set_params(
     RssiThresh = -110, # dBm RSSI threshold
 )
 
-class BaudChanger(threading.Thread):
-    def __init__(self):
-        threading.Thread.__init__(self)
-        self.daemon = True
-        self.start()
-
-    def run(self):
-        baudrates = [9.579, 17.241]
-        i = 0
-        while True:
-            time.sleep(15)
-            event.clear()
-            rfm.receive_stop()
-            i += 1
-            if i == len(baudrates):
-                i = 0
-            bd = baudrates[i]
-
-            print("Switch baudrate to " + str(bd) + " kbit/s")
-            rfmlock.acquire()
-            rfm.set_params(Datarate = bd)
-            rfmlock.release()
-            event.set()
-
-baudChanger = BaudChanger()
+paramChanger = rfmparam.ParamChanger(rfm, event, rfmlock,
+    [
+        rfmparam.PARAM_TX35,
+        rfmparam.PARAM_TX29,
+        rfmparam.PARAM_BRESSER,
+        rfmparam.PARAM_EC3K
+    ]
+)
 
 def getCacheSensor(id, sensorConfig = None):
     sensor = None
@@ -162,7 +135,7 @@ def getCacheSensor(id, sensorConfig = None):
                 outSensor = getCacheSensor(sensorConfig["idOutside"]) if 'idOutside' in sensorConfig else None
                 if (outSensor is not None) and ('AH' in outSensor):
                     sensor["AHratio"] = round((outSensor["AH"] / sensor["AH"] - 1) * 100)
-                    sensor["RHvent"] = round(outSensor["DD"] / sensor["SDD"] * 100)
+                    sensor["RHvent"] = round(outSensor["VP"] / sensor["SVP"] * 100)
 
                 if ('rhMax' in sensorConfig) and (sensor["RH"] > sensorConfig["rhMax"]):
                     #too wet!
@@ -239,7 +212,7 @@ class MyHttpRequestHandler(Handler):
 
         elif p == '/history' and influxClient and name:
             resp = influxClient.query(
-                "SELECT mean(T), mean(RH) FROM one_week.lacrosse WHERE (sensor = $name) AND time >= now() - 4h GROUP BY time(3m) fill(none)",
+                "SELECT mean(mean_T), mean(mean_RH) FROM rp_1w.weather WHERE (sensor = $name) AND time >= now() - 4h GROUP BY time(3m) fill(none)",
                 bind_params={'name': name}
                 )
             self.send_response(200)
@@ -271,120 +244,73 @@ apisrv = apiserver.ApiServer(p)
 while 1:
     event.wait()
     rfmlock.acquire()
-    rxData = rfm.receive(7)
+    rxData = rfm.receive(paramChanger.rxLen())
     rfmlock.release()
 
-    try:
-        sensorObj = sensors.rawsensor.CreateSensor(rxData)
-        sensorData = sensorObj.GetData()
-        payload = {}
-        id = sensorData["ID"]
-        payload["id"] = id
-        T = sensorData["T"][0]
-        payload["T"] = T
-        if 'RH' in sensorData:
-            RH = int(sensorData['RH'][0])
-            payload["RH"] = RH
-            a = 7.5
-            b = 237.4
-            SDD = 6.1078 * 10**(a*T/(b+T))
-
-            DD = RH / 100.0 * SDD
-            v = math.log10(DD/6.1078)
-            payload["DEW"] = round(b*v/(a-v), 1)
-            payload["AH"] = round(10**5 * 18.016/8314.3 * DD/(T+273.15), 1)
-            payload["SDD"] = SDD
-            payload["DD"] = DD
-
-            DD = RH / 80.0 * SDD
-            v = math.log10(DD/6.1078)
-            payload["DEW80"] = round(b*v/(a-v), 1)
-
-            DD = RH / 60.0 * SDD
-            v = math.log10(DD/6.1078)
-            payload["DEW60"] = round(b*v/(a-v), 1)
-
-    except:
+    if rxData == None:
         continue
 
-    payload["rssi"] = rxData[1]
-    payload["afc"] = rxData[2]
-    payload["batlo"] = sensorData['batlo']
-    payload["init"] = sensorData["init"]
+    try:
+        sensor = sensors.decode(rxData)
+        if not sensor:
+            continue
+        print(sensor)
+        sensorValues = sensor.getValues()
+        payload = {}
+        for k in sensorValues:
+             payload[k] = sensorValues[k][0]
+
+        id = sensor.getId()
+        payload["id"] = id
+
+    except Exception as e:
+        print("EXCEPT!", e)
+        continue
+
     lock.acquire()
     for csens in config["sensors"]:
         if id == csens["id"]:
             payload["room"] = csens["name"]
+            if 'Tsurf' in csens and 'T' in sensorValues and 'RH' in sensorValues:
+                aw = round(climatools.calcAw(payload['T'], payload['RH'], csens['Tsurf']))
+                if aw > 100:
+                    aw = 100
+                payload["aw"] = aw
+                awWarn = csens["awWarn"] if 'awWarn' in csens else 80
+                payload["awStatus"] = 'high' if aw >= awWarn else 'ok'
             break
 
     apipayl = {
         "decode": [{
-            "protocol": "lacrosse",
+            "protocol": sensor.getType(),
             "params": payload,
-            "class": "weather"
+            "class": sensor.getClass()
         }]
     }
     apisrv.send(apipayl)
 
     if not id in cache:
         cache[id] = {}
-        cache[id]["count"] = 1
-        cache[id]["payload"] = payload
-        cache[id]["payload"]["tMin"] = T
-        cache[id]["payload"]["tMax"] = T
-        if "RH" in payload:
-            cache[id]["payload"]["rhMin"] = RH
-            cache[id]["payload"]["rhMax"] = RH
-    else:
-        payload["tMin"] = cache[id]["payload"]["tMin"]
-        payload["tMax"] = cache[id]["payload"]["tMax"]
-        if payload["tMin"] > T:
-            payload["tMin"] = T
-        if payload["tMax"] < T:
-            payload["tMax"] = T
-        if "RH" in payload:
-            payload["rhMin"] = cache[id]["payload"]["rhMin"]
-            payload["rhMax"] = cache[id]["payload"]["rhMax"]
-            if payload["rhMin"] > RH:
-                payload["rhMin"] = RH
-            if payload["rhMax"] < RH:
-                payload["rhMax"] = RH
-
-
-        cache[id]["payload"] = payload
-
+    cache[id]["payload"] = payload
     cache[id]["ts"] = datetime.now()
-    cache[id]["count"] += 1
-
-    line = "|id: {:2}  ".format(id)
-    line += '{:12}|'.format(payload["room"][:12] if ("room" in payload) else "---")
-    line += 'T: {:5.1f} C|'.format(payload["T"])
-    if "RH" in payload:
-        line += 'RH: {:2} %|'.format(payload["RH"])
-    else:
-        line += 'RH: -- %|'
-    line += "battery: " + ("LOW" if payload["batlo"] else "OK ") + "|"
-    line += "init: " + ("1" if payload["init"] else "0") + "|"
-    line += "RSSI: {:6.1f} dBm|".format(rxData[1])
-    line += "FEI: {:5.1f} kHz|".format(rxData[3] * rfm69.FSTEP / 1000)
-    print(line)
     lock.release()
+
+
+    measurement = config["influxdb"]["measurement"] if "measurement" in config["influxdb"] else ""
+    if measurement == "":
+        measurement = sensor.getClass()
 
     if influxClient:
         try:
-            T = payload["T"]
             wr = {
-                "measurement": config["influxdb"]["measurement"] if "measurement" in config["influxdb"] else "lacrosse",
-                "fields": {
-                    "T": T
-                },
+                "measurement": measurement,
+                "fields": {},
                 "tags": {"sensor": payload["id"] if not ("room" in payload) else payload["room"]}
             }
+            val = sensor.getDbValues()
+            for key in val:
+               wr["fields"][key] = val[key][0]
 
-            if "RH" in payload:
-                wr["fields"]["RH"] = payload["RH"]
-                wr["fields"]["DEW"] = payload["DEW"]
-                wr["fields"]["AH"] = payload["AH"]
             influxClient.write_points([wr])
 
         except Exception as ex:
@@ -393,14 +319,13 @@ while 1:
     if influxClient2:
         try:
             point = (
-                Point(config["influxdb2"]["measurement"])
+                Point(measurement)
                 .tag("sensor", payload["id"] if not ("room" in payload) else payload["room"])
                 .field("T", T)
             )
-            if "RH" in payload:
-                point.field("RH", payload["RH"])
-                point.field("DEW", payload["DEW"])
-                point.field("AH", payload["AH"])
+            val = sensor.getDbValues()
+            for key in val:
+               point.field(key, val[key][0])
 
             influxapi.write(bucket=config["influxdb2"]["bucket"], org=config["influxdb2"]["org"], record=point)
 
@@ -409,6 +334,8 @@ while 1:
 
     if mqttClient:
         try:
-            mqttClient.publish('home/lacrosse/'+ payload['id'], json.dumps(payload))
+            topic = config["mqtt"]["basetopic"] if "basetopic" in config["mqtt"] else "home"
+            topic += "/" + sensor.getClass() + "/" + payload['id']
+            mqttClient.publish(topic, json.dumps(payload))
         except:
             print("Error writing to MQTT!")

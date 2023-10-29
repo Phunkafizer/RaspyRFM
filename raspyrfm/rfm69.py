@@ -588,4 +588,4 @@ class Rfm69(rfmbase.RfmBase):
 
 		self.receive_end()
 
-		return (rxdata, rssi, afc, fei)
+		return (rxdata, rssi, afc, fei * FSTEP)
