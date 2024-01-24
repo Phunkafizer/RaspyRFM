@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 import sys, time, threading, math, json, os, argparse, shutil
@@ -9,16 +9,9 @@ import apiserver
 import climatools
 import rfmparam
 
-try:
-    #python2.7
-    import SocketServer as socketserver
-    from urlparse import urlparse, parse_qs
-    from SimpleHTTPServer import SimpleHTTPRequestHandler as Handler
-except ImportError:
-    #python3
-    import socketserver
-    from http.server import SimpleHTTPRequestHandler as Handler
-    from urllib.parse import urlparse, parse_qs
+import socketserver
+from http.server import SimpleHTTPRequestHandler as Handler
+from urllib.parse import urlparse, parse_qs
 
 lock = threading.Lock()
 event = threading.Event()
@@ -202,6 +195,12 @@ class MyHttpRequestHandler(Handler):
         if p == '/data':
             self.getjson()
 
+        elif p == '/config':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(config).encode())
+
         elif p == '/':
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
@@ -321,7 +320,6 @@ while 1:
             point = (
                 Point(measurement)
                 .tag("sensor", payload["id"] if not ("room" in payload) else payload["room"])
-                .field("T", T)
             )
             val = sensor.getDbValues()
             for key in val:

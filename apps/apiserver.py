@@ -33,9 +33,10 @@ class clientthread(threading.Thread):
                         self.__cb(d)
                     #rctrx.send(d["protocol"], d["params"])
             except:
+                print("Exception")
                 pass
             lock.release()
-        
+
         lock.acquire()
         clients.remove(self)
         lock.release()
@@ -45,6 +46,7 @@ class ApiServer(threading.Thread):
         self.__srvsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.__srvsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.__srvsock.bind(('', port))
+        print("API listening on port", port)
         self.__srvsock.listen(5)
         self.__cb = cb
         threading.Thread.__init__(self)
@@ -54,6 +56,7 @@ class ApiServer(threading.Thread):
     def run(self):
         while True:
             (client, address) = self.__srvsock.accept()
+            print("API connect from", address)
             ct = clientthread(client, self.__cb)
             ct.daemon = True
             ct.start()

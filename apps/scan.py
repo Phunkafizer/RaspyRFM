@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 from raspyrfm import *
 
@@ -15,7 +15,7 @@ for i in range(len(d)):
 
 	elif d[i] == 0x24:
 		line += "Found RFM69 / SX1231"
-		
+
 	elif d[i] == 0x12:
 		line += "Found RFM95/96 / SX1276"
 	else:

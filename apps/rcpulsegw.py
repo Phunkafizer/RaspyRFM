@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 from re import split
 from raspyrfm import *
@@ -66,7 +66,7 @@ p = config["apiport"] if "apiport" in config else 1989
 apisrv = apiserver.ApiServer(p, apicb)
 
 def on_connect(client, userdata, flags, rc):
-	print("Connected with result code "+str(rc))
+	print("Connected MQTT with result code "+str(rc))
 	if rc == 0:
 		client.subscribe(MQTT_BASE_TOPIC + "/#")
 	#client.connected_flag = rc == 0

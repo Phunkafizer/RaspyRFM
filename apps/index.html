@@ -1,21 +1,29 @@
 <!doctype html>
 <html lang="en">
-  <head>
+
+<head>
     <!-- Required meta tags -->
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 
     <!-- Bootstrap CSS -->
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"
+        integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
     <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
 
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"
+        integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1"
+        crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"
+        integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM"
+        crossorigin="anonymous"></script>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.27.0/moment.min.js" integrity="sha512-rmZcZsyhe0/MAjquhTgiUcb4d9knaFc7b5xAfju483gbEXTkeJRUMIPk6s3ySZMYUHEcjKbjLjyddGWMrNEvZg==" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.27.0/moment.min.js"
+        integrity="sha512-rmZcZsyhe0/MAjquhTgiUcb4d9knaFc7b5xAfju483gbEXTkeJRUMIPk6s3ySZMYUHEcjKbjLjyddGWMrNEvZg=="
+        crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@2.8.0"></script>
-    
+
 
     <style>
         body {
@@ -36,10 +44,21 @@
         div.sensorpanel {
             padding: 0.2em;
         }
+
         div.sensor {
             background-color: #212124;
             padding: 0.5em;
         }
+
+        #detailpanel {
+            background-color: #235;
+            padding: 0.5em;
+        }
+
+        .sensorsel {
+            display: none;
+        }
+
         div.sensorheader {
             font-size: 0.7em;
             color: lightslategrey;
@@ -49,7 +68,7 @@
             align-items: baseline;
         }
 
-        div.measure .measurevalue  {
+        div.measure .measurevalue {
             width: 2.5em;
             font-size: 1.1em;
             color: whitesmoke;
@@ -61,7 +80,8 @@
             margin-right: 1em;
         }
 
-        .measurevalue.high, .measurevalue.low {
+        .measurevalue.high,
+        .measurevalue.low {
             color: firebrick !important;
             font-weight: bold;
         }
@@ -85,25 +105,237 @@
         #tempChart {
             height: 150px;
         }
+
+        .btndiv {
+            padding: 16px 0;
+        }
     </style>
 
     <title>Raumklima</title>
-  </head>
-  <body>
+</head>
+
+<body>
     <div id="offlineHint"><span>Offline!</span></div>
     <div id="grid" class="container">
         <div id="sensorrow" class="row"></div>
-        <hr/>
-        <div id="detailrow" class="row"></div>
-        <div class="row"><canvas id="myChart"></canvas></div>
+        <hr />
+        <div id="detailpanel" class="sensorsel row">
+            <div class="col-12">
+                <div id="sensordetails" class="row"></div>
+                <div class="btndiv row justify-content-md-center">
+                    <button id="btnSensorConfig" type="button" class="btn btn-primary material-icons"
+                        data-toggle="modal" data-target="#divSensorConfig">settings</button>
+                </div>
+            </div>
+        </div>
+        <div class="row sensorsel"><canvas id="myChart"></canvas></div>
         <div class="row"><canvas id="tempChart"></canvas></div>
         <div class="row"><canvas id="ahChart"></canvas></div>
     </div>
-  </body>
+
+    <div class="btndiv row justify-content-md-center">
+        <button id="btnConfig" type="button" class="btn btn-primary material-icons" data-toggle="modal"
+            data-target="#divConfig">settings</button>
+    </div>
+
+    <div id="divSensorConfig" class="modal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Sensorkonfiguration</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <label>Sensorname</label>
+                    <div class="input-group mb-3">
+                        <input id="sensorCfgName" type="text" class="form-control">
+                    </div>
+
+                    <div class="form-row">
+                        <div class="input-group col-md-6">
+                            <label>T min.</label>
+                            <div class="input-group mb-3">
+                                <input id="sensorCfgTmin" type="text" class="form-control">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text">°C</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="input-group col-md-6">
+                            <label>T max.</label>
+                            <div class="input-group mb-3">
+                                <input id="sensorCfgTmax" type="text" class="form-control">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text">°C</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="input-group col-md-6">
+                            <label>RH min.</label>
+                            <div class="input-group mb-3">
+                                <input id="sensorCfgRhmin" type="text" class="form-control">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text">%</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="input-group col-md-6">
+                            <label>RH max.</label>
+                            <div class="input-group mb-3">
+                                <input id="sensorCfgRhmax" type="text" class="form-control">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text">%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="btnDelSensorCfg" type="button" class="material-icons btn btn-danger">delete</button>
+                    <button id="btnSaveSensorCfg" type="button" class="material-icons btn btn-primary">save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="divConfig" class="modal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Konfiguration</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+
+                <div class="modal-body">
+                    <h5>MQTT</h5>
+                    <div class="form-row">
+                        <div class="input-group col-md-6">
+                            <label>Host</label>
+                            <div class="input-group mb-3">
+                                <input id="mqttHost" type="text" class="form-control">
+                            </div>
+                        </div>
+                        <div class="input-group col-md-6">
+                            <label>Port</label>
+                            <div class="input-group mb-3">
+                                <input id="mqttPort" type="text" class="form-control" placeholder="1883">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="input-group col-md-6">
+                            <label>Username</label>
+                            <div class="input-group mb-3">
+                                <input id="mqttUser" type="text" class="form-control">
+                            </div>
+                        </div>
+                        <div class="input-group col-md-6">
+                            <label>Password</label>
+                            <div class="input-group mb-3">
+                                <input id="mqttPass" type="text" class="form-control">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-body">
+                    <h5>InfluxDB</h5>
+                    <div class="form-row">
+                        <div class="input-group col-md-6">
+                            <label>Host</label>
+                            <div class="input-group mb-3">
+                                <input id="influxHost" type="text" class="form-control">
+                            </div>
+                        </div>
+                        <div class="input-group col-md-6">
+                            <label>Port</label>
+                            <div class="input-group mb-3">
+                                <input id="influxPort" type="text" class="form-control" placeholder="8086">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="input-group col-md-6">
+                            <label>Username</label>
+                            <div class="input-group mb-3">
+                                <input id="influxUser" type="text" class="form-control">
+                            </div>
+                        </div>
+                        <div class="input-group col-md-6">
+                            <label>Password</label>
+                            <div class="input-group mb-3">
+                                <input id="influxPass" type="text" class="form-control">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="input-group col-md-6">
+                            <label>Database</label>
+                            <div class="input-group mb-3">
+                                <input id="influxDatabase" type="text" class="form-control">
+                            </div>
+                        </div>
+                        <div class="input-group col-md-6">
+                            <label>Measurement</label>
+                            <div class="input-group mb-3">
+                                <input id="influxMeasurement" type="text" class="form-control">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-body">
+                    <h5>InfluxDB 2</h5>
+
+                    <label>URL</label>
+                    <div class="input-group mb-3">
+                        <input id="influx2Url" type="text" class="form-control">
+                    </div>
+
+                    <label>Token</label>
+                    <div class="input-group mb-3">
+                        <input id="influx2Token" type="text" class="form-control">
+                    </div>
+
+                    <div class="form-row">
+                        <div class="input-group col-md-6">
+                            <label>Organisation</label>
+                            <div class="input-group mb-3">
+                                <input id="influx2Org" type="text" class="form-control">
+                            </div>
+                        </div>
+                        <div class="input-group col-md-6">
+                            <label>Bucket</label>
+                            <div class="input-group mb-3">
+                                <input id="influx2Bucket" type="text" class="form-control" placeholder="">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button id="btnSaveConfig" type="button" class="material-icons btn btn-primary">save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</body>
+
 </html>
 
 <script>
-    var 
+    var
         detailId = null,
         tempChartData = {
             labels: [],
@@ -124,10 +356,12 @@
                     data: []
                 }
             ]
-        };
-    
+        },
+        dataCache = null,
+        configCache = {};
+
     function drawDetails(sensor) {
-        function createMeasure(name, field, unit, tooltip="", toFixed = null) {
+        function createMeasure(name, field, unit, tooltip = "", toFixed = null) {
             var v = "---";
             if (sensor.hasOwnProperty(field)) {
                 v = sensor.hasOwnProperty(field) ? sensor[field] : "---";
@@ -140,7 +374,7 @@
                     .append($("<div>")
                         .addClass('sensortitle')
                         .text(name)
-                    )  
+                    )
                 )
                 .append($("<div>").addClass("measure d-flex justify-content-between")
                     .append($("<span>").addClass("measurevalue").text(v))
@@ -149,26 +383,24 @@
                 .prop('title', tooltip);
         }
 
-        $("#detailrow")
-            .html($("<div>").addClass("sensorpanel col-12")
-                .append($("<div>").addClass("sensor row")
-                    .append(createMeasure("ID", "id", ""))
-                    .append(createMeasure("T", "T", "°C", "Temperatur"))
-                    .append(createMeasure("Tmin", "T_min", "°C"))
-                    .append(createMeasure("Tmax", "T_max", "°C"))
-                    .append(createMeasure("RH", "RH", "%", "rel. Luftfeuchtigkeit"))
-                    .append(createMeasure("RHmin", "RH_min", "%"))
-                    .append(createMeasure("RHmax", "RH_max", "%"))
-                    .append(createMeasure("AH", "AH", "g/m³", "Absolute Luftfeuchtigkeit"))
-                    .append(createMeasure("AHratio", "AHratio", "%"))
-                    .append(createMeasure("Taupunkt", "DEW", "°C"))
-                    .append(createMeasure("TF80", "TH80", "°C"))
-                    .append(createMeasure("TF60", "TH60", "°C"))
-                    .append(createMeasure("aw", "aw", "%", "Oberflächenfeuchtigkeit", 0))
-                    .append(createMeasure("SDD", "SVP", "hPa", "Sättingsdampfdruck", 1))
-                    .append(createMeasure("DD", "VP", "hPa", "Dampfdruck", 1))
-                )
-            );
+        let detdiv = $("#sensordetails");
+        detdiv.empty();
+        detdiv
+            .append(createMeasure("ID", "id", ""))
+            .append(createMeasure("T", "T", "°C", "Temperatur"))
+            .append(createMeasure("Tmin", "T_min", "°C"))
+            .append(createMeasure("Tmax", "T_max", "°C"))
+            .append(createMeasure("RH", "RH", "%", "rel. Luftfeuchtigkeit"))
+            .append(createMeasure("RHmin", "RH_min", "%"))
+            .append(createMeasure("RHmax", "RH_max", "%"))
+            .append(createMeasure("AH", "AH", "g/m³", "Absolute Luftfeuchtigkeit"))
+            .append(createMeasure("AHratio", "AHratio", "%"))
+            .append(createMeasure("Taupunkt", "DEW", "°C"))
+            .append(createMeasure("TF80", "TH80", "°C"))
+            .append(createMeasure("TF60", "TH60", "°C"))
+            .append(createMeasure("aw", "aw", "%", "Oberflächenfeuchtigkeit", 0))
+            .append(createMeasure("SDD", "SVP", "hPa", "Sättingsdampfdruck", 1))
+            .append(createMeasure("DD", "VP", "hPa", "Dampfdruck", 1));
     }
 
     function drawChart(sensor) {
@@ -176,9 +408,9 @@
         var rhData = [];
 
         $.getJSON("/history",
-            {'name': sensor['room']},
-            function(data) {
-                $.each(data, function(idx, val) {
+            { 'name': sensor['room'] },
+            function (data) {
+                $.each(data, function (idx, val) {
                     tData.push({
                         't': val[0],
                         'y': val[1]
@@ -225,7 +457,7 @@
                                     display: true,
                                     labelString: 'T / °C'
                                 }
-                            },{
+                            }, {
                                 position: 'right',
                                 id: 'yax2',
                                 ticks: {
@@ -248,7 +480,8 @@
     }
 
     function loadValues() {
-        $.getJSON("/data", function(data) {
+        $.getJSON("/data", function (data) {
+            dataCache = data;
             $("#sensorrow").empty();
 
             tempChartData.labels = [];
@@ -260,11 +493,11 @@
             humChartData.datasets[0].data = [];
             humChartData.datasets[0].backgroundColor = [];
             humChartData.ahOutside = null;
-            
-            $.each(data["sensors"], function(idx, val) {
+
+            $.each(data["sensors"], function (idx, val) {
                 let t = 'T' in val ? val["T"] : '---';
                 let rh = ('RH' in val) ? val["RH"] : '---';
-                let ah = ('AH' in val)  ? val["AH"] : '---';
+                let ah = ('AH' in val) ? val["AH"] : '---';
                 let rhStatus = val["rhStatus"] == "high" ? "high" : val["rhStatus"] == "low" ? "low" : "";
                 let tStatus = val["tStatus"] == "high" ? "high" : val["tStatus"] == "low" ? "low" : "";
                 let ahRat = 'AHratio' in val ? val["AHratio"] : '---';
@@ -297,7 +530,7 @@
                                 )
                                 .append($("<div>").addClass("measure flex-fill d-flex justify-content-between")
                                     .append($("<span>").addClass("measurevalue").addClass(rhStatus).text(rh)
-                                        .append($("<span>").addClass("trend").text(( (ventdiff && (ventdiff >= 0)) ? "+" : "") + ventdiff))
+                                        .append($("<span>").addClass("trend").text(((ventdiff && (ventdiff >= 0)) ? "+" : "") + ventdiff))
                                     )
                                     .append($("<span>").addClass("measureunit").text("%"))
                                 )
@@ -312,31 +545,31 @@
                 switch (val["tStatus"]) {
                     case 'high':
                     case 'low':
-                        tempChartData.datasets[0].backgroundColor.push('#A00'); 
+                        tempChartData.datasets[0].backgroundColor.push('#A00');
                         break;
                     case 'ok':
-                        tempChartData.datasets[0].backgroundColor.push('#394'); 
+                        tempChartData.datasets[0].backgroundColor.push('#394');
                         break;
                     default:
-                        tempChartData.datasets[0].backgroundColor.push('#888'); 
+                        tempChartData.datasets[0].backgroundColor.push('#888');
                         break;
                 }
                 if (val["isOutside"] === true)
-                        tempChartData.tOutside = val['T'];
+                    tempChartData.tOutside = val['T'];
 
                 humChartData.datasets[0].data.push(val['AH']);
                 switch (val["rhStatus"]) {
                     case 'high':
                     case 'low':
-                        humChartData.datasets[0].backgroundColor.push('#A00'); 
+                        humChartData.datasets[0].backgroundColor.push('#A00');
                         break;
                     case 'ok':
-                        humChartData.datasets[0].backgroundColor.push('#394'); 
+                        humChartData.datasets[0].backgroundColor.push('#394');
                         break;
                     default:
-                        humChartData.datasets[0].backgroundColor.push('#888'); 
+                        humChartData.datasets[0].backgroundColor.push('#888');
                         break;
-                }  
+                }
                 if (val["isOutside"] === true)
                     humChartData.ahOutside = val['AH'];
             });
@@ -345,13 +578,22 @@
             tempChart.update();
 
             $("div.sensor")
-                .click(function() {
-                    $("div.sensor").removeClass("selected");
-                    $(this).addClass("selected");
-                    var val = $(this).data("values");
-                    detailId = ($(this).data("values").id);
-                    drawDetails($(this).data("values"));
-                    drawChart(val);
+                .click(function () {
+                    if ($(this).hasClass("selected")) {
+                        //unselect!
+                        $(".sensorsel").hide();
+                        $("div.sensor").removeClass("selected");
+                        detailId = null;
+                    }
+                    else {
+                        $(".sensorsel").show();
+                        $("div.sensor").removeClass("selected");
+                        $(this).addClass("selected");
+                        var val = $(this).data("values");
+                        detailId = ($(this).data("values").id);
+                        drawDetails($(this).data("values"));
+                        drawChart(val);
+                    }
                 })
                 .each(function (index, element) {
                     if (detailId == $(element).data('values').id) {
@@ -362,12 +604,12 @@
 
             $("#offlineHint").hide();
         })
-            .fail(function() {
+            .fail(function () {
                 $("#offlineHint").show();
             });
     }
 
-    $(function() {
+    $(function () {
         tempChart = new Chart($("#tempChart"), {
             type: 'bar',
             data: tempChartData,
@@ -406,7 +648,7 @@
             },
             plugins: [
                 {
-                    afterDraw: function(chart) {
+                    afterDraw: function (chart) {
                         if (chart.data.tOutside === null)
                             return;
                         var ctxPlugin = chart.chart.ctx;
@@ -461,7 +703,7 @@
             },
             plugins: [
                 {
-                    afterDraw: function(chart) {
+                    afterDraw: function (chart) {
                         if (chart.data.ahOutside === null)
                             return;
                         var ctxPlugin = chart.chart.ctx;
@@ -478,11 +720,69 @@
                 }
             ]
         });
-        
+
         loadValues();
-        
-        setInterval(function() {
+
+        $.getJSON('/config', '', function (data) {
+            configCache = data;
+
+            if ('mqtt' in data) {
+                $('#mqttHost').val(data.mqtt.server);
+                $('#mqttPort').val(data.mqtt.port);
+            }
+
+            if ('influxdb' in data) {
+                $('#influxHost').val(data.influxdb.host);
+                $('#influxPort').val(data.influxdb.port);
+                $('#influxUser').val(data.influxdb.user);
+                $('#influxPass').val(data.influxdb.pass);
+                $('#influxDatabase').val(data.influxdb.database);
+                $('#influxMeasurement').val(data.influxdb.measurement);
+            }
+
+            if ('influxdb2' in data) {
+                $('#influx2Url').val(data.influxdb2.url);
+                $('#influx2Token').val(data.influxdb2.token);
+                $('#influx2Org').val(data.influxdb2.org);
+                $('#influx2Bucket').val(data.influxdb2.bucket);
+            }
+        });
+
+        setInterval(function () {
             loadValues();
         }, 5000);
+
+        $('#btnSensorConfig').click(function () {
+            $.each(configCache.sensors, function (idx, val) {
+                if (detailId == val.id) {
+                    $("#sensorCfgName").val(val.name);
+                    $("#sensorCfgTmin").val(val.tMin);
+                    $("#sensorCfgTmax").val(val.tMax);
+                    $("#sensorCfgRhmin").val(val.rhMin);
+                    $("#sensorCfgRhmax").val(val.rhMax);
+                    return false;
+                }
+            });
+        });
+
+        $('#btnSaveSensorCfg').click(function () {
+            $.post('setsensorcfg', {
+                id: detailId,
+                tMin: $("#sensorCfgTmin").val(),
+                tMax: $("#sensorCfgTmax").val()
+            });
+        })
+
+        $('#btnSaveConfig').click(function() {
+            if (!('mqtt' in configCache))
+                configCache['mqtt'] = {};
+            configCache.mqtt.server = $('#mqttHost').val();
+            $.ajax({
+                url: '/config',
+                type: 'post',
+                data: JSON.stringify(configCache),
+                contentType:"application/json; charset=utf-8"
+            });
+        })
     });
 </script>
