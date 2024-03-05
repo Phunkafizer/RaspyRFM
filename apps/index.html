@@ -148,9 +148,19 @@
                     </button>
                 </div>
                 <div class="modal-body">
-                    <label>Sensorname</label>
-                    <div class="input-group mb-3">
-                        <input id="sensorCfgName" type="text" class="form-control">
+                    <div class="form-row">
+                        <div class="input-group col-md-6">
+                            <label>ID</label>
+                            <div class="input-group mb-3">
+                                <input id="sensorCfgId" type="text" class="form-control">
+                            </div>
+                        </div>
+                        <div class="input-group col-md-6">
+                            <label>Name</label>
+                            <div class="input-group mb-3">
+                                <input id="sensorCfgName" type="text" class="form-control">
+                            </div>
+                        </div>
                     </div>
 
                     <div class="form-row">
@@ -337,6 +347,7 @@
 <script>
     var
         detailId = null,
+        detailIndex = -1,
         tempChartData = {
             labels: [],
             datasets: [
@@ -505,7 +516,7 @@
 
                 $("#sensorrow")
                     .append($("<div>").addClass("sensorpanel col-6 col-sm-4 col-md-3 col-lg-2")
-                        .append($("<div>").addClass("sensor").data("id", val["id"]).data("values", val)
+                        .append($("<div>").addClass("sensor").data("id", val["id"]).data("values", val).data("index", idx)
                             .append($("<div>").addClass("sensorheader d-flex justify-content-between")
                                 .append($("<div>")
                                     .addClass('sensortitle')
@@ -584,6 +595,7 @@
                         $(".sensorsel").hide();
                         $("div.sensor").removeClass("selected");
                         detailId = null;
+                        detailIndex = null;
                     }
                     else {
                         $(".sensorsel").show();
@@ -591,6 +603,7 @@
                         $(this).addClass("selected");
                         var val = $(this).data("values");
                         detailId = ($(this).data("values").id);
+                        detailIndex = $(this).data("index");
                         drawDetails($(this).data("values"));
                         drawChart(val);
                     }
@@ -753,6 +766,8 @@
         }, 5000);
 
         $('#btnSensorConfig').click(function () {
+            $("#sensorCfgId").val(detailId);
+            $("#sensorCfgName").val('');
             $.each(configCache.sensors, function (idx, val) {
                 if (detailId == val.id) {
                     $("#sensorCfgName").val(val.name);
@@ -766,10 +781,33 @@
         });
 
         $('#btnSaveSensorCfg').click(function () {
-            $.post('setsensorcfg', {
+            /*$.post('setsensorcfg', {
                 id: detailId,
                 tMin: $("#sensorCfgTmin").val(),
                 tMax: $("#sensorCfgTmax").val()
+            });*/
+            var idx = -1;
+            if (detailIndex < configCache.sensors.length) {
+                idx = detailIndex;
+            }
+            else {
+                configCache.sensors.push({});
+                idx = configCache.sensors.length - 1;
+            }
+
+            configCache.sensors[idx] = {
+                id: $("#sensorCfgId").val(),
+                name: $("#sensorCfgName").val(),
+                tMin: parseFloat( $("#sensorCfgTmin").val()),
+                tMax: parseFloat($("#sensorCfgTmax").val()),
+                rhMin: parseFloat($("#sensorCfgRhmin").val()),
+                rhMax: parseFloat($("#sensorCfgRhmax").val())
+            };
+            $.ajax({
+                url: '/config',
+                type: 'post',
+                data: JSON.stringify(configCache),
+                contentType:"application/json"
             });
         })
 
@@ -781,7 +819,7 @@
                 url: '/config',
                 type: 'post',
                 data: JSON.stringify(configCache),
-                contentType:"application/json; charset=utf-8"
+                contentType:"application/json"
             });
         })
     });

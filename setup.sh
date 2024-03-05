@@ -16,3 +16,4 @@ pip install paho-mqtt
 pip install influxdb
 pip install influxdb-client
 pip install -e .
+apps/scan.py

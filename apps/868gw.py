@@ -8,15 +8,18 @@ from datetime import datetime
 import apiserver
 import climatools
 import rfmparam
-
 import socketserver
-from http.server import SimpleHTTPRequestHandler as Handler
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import urlparse
+import json
 from urllib.parse import urlparse, parse_qs
 
 lock = threading.Lock()
 event = threading.Event()
 event.set()
 rfmlock = threading.Lock()
+reloadConf = True
+config = {}
 
 script_dir = os.path.dirname(os.path.realpath(__file__))
 if not os.path.exists(script_dir + "/868gw.conf"):
@@ -69,7 +72,6 @@ except Exception as ex:
     influxClient2 = None
     print("InfluxDB2 Exception:", ex)
 
-
 try:
     import paho.mqtt.client as mqtt
     mqttClient = mqtt.Client()
@@ -92,7 +94,7 @@ rfm.set_params(
     Datarate = 9.579, # kbit/s baudrate
     ModulationType = rfm69.FSK, # modulation
     SyncPattern = [0x2d, 0xd4], # syncword
-    Bandwidth = 200, # kHz
+    Bandwidth = 240, # kHz
     AfcBandwidth = 200, # kHz
     #AfcFei = 0x0C, # AFC auto clear, AFC auto on
     RssiThresh = -110, # dBm RSSI threshold
@@ -153,8 +155,8 @@ def getCacheSensor(id, sensorConfig = None):
 
     return sensor
 
-class MyHttpRequestHandler(Handler):
-    def getjson(self):
+class MyHttpRequestHandler(BaseHTTPRequestHandler):
+    def getdata(self):
         self.send_response(200)
         self.send_header('Content-type', 'application/json')
         self.end_headers()
@@ -193,7 +195,7 @@ class MyHttpRequestHandler(Handler):
             name = q['name'][0]
 
         if p == '/data':
-            self.getjson()
+            self.getdata()
 
         elif p == '/config':
             self.send_response(200)
@@ -220,6 +222,25 @@ class MyHttpRequestHandler(Handler):
             self.wfile.write(json.dumps(resp.raw['series'][0]['values']).encode())
         else:
             return self.send_error(404, self.responses.get(404)[0])
+
+    def do_POST(self):
+        url = urlparse(self.path)
+        path = url.path
+        if path == '/config':
+            print("config save!")
+            content_len = int(self.headers.get('content-length'))
+            print("len:", content_len)
+            s = self.rfile.read(content_len)
+            print("read string", s)
+            conf = json.loads(s)
+            print("config now: ", conf)
+            global config
+            config = conf
+            reloadConf = True
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b'')
+        
 
 
 class Server(socketserver.ThreadingMixIn, socketserver.TCPServer):
@@ -267,6 +288,7 @@ while 1:
         continue
 
     lock.acquire()
+    #print("Current config", config)
     for csens in config["sensors"]:
         if id == csens["id"]:
             payload["room"] = csens["name"]
