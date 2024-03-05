@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 from raspyrfm import *
 import sys
@@ -36,8 +36,8 @@ rfm.set_params(
 )
 
 rxFifo = []
-rxEvent = threading.Event()
-rxMutex = threading.Lock()
+fifoEvent = threading.Event()
+fifoMutex = threading.Lock()
 
 class RxThread(threading.Thread):
 	def __init__(self, rfm):
@@ -46,18 +46,25 @@ class RxThread(threading.Thread):
 
 	def __callback(self, rfm):
 		frame = rfm.read_fifo_wait(1)
-		len = frame[0] ^ 0xFF #invert due to whitening
+		len = frame[0] ^ 0xFF # invert due to whitening
 		frame += rfm.read_fifo_wait(len)
 
-		rxMutex.acquire()
+		Mutex.acquire()
 		rxFifo.append(frame)
 		rxMutex.release()
 		rxEvent.set()
 
 	def run(self):
 		while True:
-			self.__rfm.start_receive(self.__callback)
-
+			self.__rfm.receive_start(0)
+			frame = self.__rfm.read_fifo_wait(1)
+			framelen = frame[0] ^ 0xFF # invert due to whitening
+			frame += self.__rfm.read_fifo_wait(framelen)
+			self.__rfm.receive_end()
+			fifoMutex.acquire()
+			rxFifo.append(frame)
+			fifoMutex.release()
+			fifoEvent.set()
 
 rxThread = RxThread(rfm)
 rxThread.daemon = True
@@ -65,7 +72,7 @@ rxThread.start()
 
 def Decode(frame):
 	print(frame)
-	#decode MAX! frame
+	# decode MAX! frame
 	cnt = frame[1]
 	flag = hex(frame[2])
 	type = frame[3]
@@ -110,16 +117,16 @@ def Decode(frame):
 	print(srcadr + "->" + dstadr + " type " + hex(type) + ': ' + info)
 
 while True:
-	if rxEvent.wait(0.5) == False:
+	if fifoEvent.wait(0.5) == False:
 		continue
 
 	left = True
 	while left:
-		rxMutex.acquire()
-		rxEvent.clear()
+		fifoMutex.acquire()
+		fifoEvent.clear()
 		frame = rxFifo.pop(0)
 		left = len(rxFifo) > 0
-		rxMutex.release()
+		fifoMutex.release()
 
 		rfm.whiten_ti(frame)
 		Decode(frame)
