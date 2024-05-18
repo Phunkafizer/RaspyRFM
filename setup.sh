@@ -15,5 +15,6 @@ source .env/bin/activate
 pip install paho-mqtt
 pip install influxdb
 pip install influxdb-client
+pip install rpi-lgpio
 pip install -e .
 apps/scan.py

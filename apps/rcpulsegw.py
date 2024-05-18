@@ -11,7 +11,7 @@ MQTT_BASE_TOPIC = "home/rcpulse"
 
 try:
     import paho.mqtt.client as mqtt
-    mqttClient = mqtt.Client()
+    mqttClient = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
 except:
 	mqttClient = None
 	print("mqtt init error")

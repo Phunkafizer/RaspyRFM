@@ -74,7 +74,7 @@ except Exception as ex:
 
 try:
     import paho.mqtt.client as mqtt
-    mqttClient = mqtt.Client()
+    mqttClient = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
     mqttClient.username_pw_set(
         config["mqtt"]["user"] if ("mqtt" in config) and ("user" in config["mqtt"]) else "",
         config["mqtt"]["pass"] if ("mqtt" in config) and ("pass" in config["mqtt"]) else None,
@@ -85,9 +85,9 @@ try:
         30
     )
     mqttClient.loop_start()
-except:
+except Exception as ex:
     mqttClient = None
-    print("mqtt init error")
+    print("MQTT init error:", ex)
 
 rfm.set_params(
     Freq = 868.300, # MHz center frequency
