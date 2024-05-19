@@ -65,7 +65,7 @@ def apicb(data):
 p = config["apiport"] if "apiport" in config else 1989
 apisrv = apiserver.ApiServer(p, apicb)
 
-def on_connect(client, userdata, flags, rc):
+def on_connect(client, userdata, flags, rc, props):
 	print("Connected MQTT with result code "+str(rc))
 	if rc == 0:
 		client.subscribe(MQTT_BASE_TOPIC + "/#")
