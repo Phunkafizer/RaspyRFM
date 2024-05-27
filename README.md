@@ -6,7 +6,6 @@ Activate SPI interface with raspi-config
 Install software for RaspyRFM with
 ```sh
 sudo apt-get install git-core 
-python-dev python-pip
 git clone https://github.com/Phunkafizer/RaspyRFM.git
 cd RaspyRFM
 ./setup.sh
