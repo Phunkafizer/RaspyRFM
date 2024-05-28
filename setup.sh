@@ -12,9 +12,10 @@ done
 
 python3 -m venv .env
 source .env/bin/activate
-pip install paho-mqtt
-pip install influxdb
-pip install influxdb-client
-pip install rpi-lgpio
-pip install -e .
+pip3 install paho-mqtt
+pip3 install influxdb
+pip3 install influxdb-client
+pip3 uninstall RPi.GPIO
+pip3 install rpi-lgpio
+pip3 install -e .
 apps/scan.py

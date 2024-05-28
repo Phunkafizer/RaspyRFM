@@ -88,6 +88,7 @@ class BaseSensor:
         self.__fields = {}
         self.__calcs = {}
         self.__tags = {}
+        self._discFlag = False
         self._setTag('ID', id)
         self._setField('RSSI', rssi, 'dBm')
         self._setField('FEI', round(fei / 1000, 2), 'kHz')
@@ -135,6 +136,9 @@ class BaseSensor:
                 result[f] = self.__calcs[f]
         return result
 
+    def getDiscoveryPaths(self):
+        return []
+
     def _setField(self, symbol, val, unit=None):
         self.__fields[symbol] = (val, unit)
         if not hasattr(self, 'minMaxFieldNames'):
@@ -171,6 +175,12 @@ class WeatherSensor(BaseSensor):
             self._setCalc('DEW', climatools.calcDewPoint(T, RH), '°C')
             self._setCalc('TH80', climatools.calcDewPoint(T, RH, False, 80), '°C')
             self._setCalc('TH60', climatools.calcDewPoint(T, RH, False, 60), '°C')
+
+    def getDiscoveryPaths(self):
+        result = []
+        for fk in self.__fields:
+            pass
+
 
 class EnergySensor(BaseSensor):
     _sensorClass = 'energy'

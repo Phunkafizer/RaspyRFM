@@ -204,6 +204,15 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="form-row">
+                        <div class="input-group col-md-6">
+                            <label>ID Außensensor</label>
+                            <div class="input-group mb-3">
+                                <input id="sensorCfgIdOutside" type="text" class="form-control">
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button id="btnDelSensorCfg" type="button" class="material-icons btn btn-danger">delete</button>
@@ -775,17 +784,13 @@
                     $("#sensorCfgTmax").val(val.tMax);
                     $("#sensorCfgRhmin").val(val.rhMin);
                     $("#sensorCfgRhmax").val(val.rhMax);
+                    $("#sensorCfgIdOutside").val(val.idOutside);
                     return false;
                 }
             });
         });
 
         $('#btnSaveSensorCfg').click(function () {
-            /*$.post('setsensorcfg', {
-                id: detailId,
-                tMin: $("#sensorCfgTmin").val(),
-                tMax: $("#sensorCfgTmax").val()
-            });*/
             var idx = -1;
             if (detailIndex < configCache.sensors.length) {
                 idx = detailIndex;
@@ -794,15 +799,32 @@
                 configCache.sensors.push({});
                 idx = configCache.sensors.length - 1;
             }
-
             configCache.sensors[idx] = {
                 id: $("#sensorCfgId").val(),
-                name: $("#sensorCfgName").val(),
-                tMin: parseFloat( $("#sensorCfgTmin").val()),
-                tMax: parseFloat($("#sensorCfgTmax").val()),
-                rhMin: parseFloat($("#sensorCfgRhmin").val()),
-                rhMax: parseFloat($("#sensorCfgRhmax").val())
+                name: $("#sensorCfgName").val()
             };
+
+            cs = configCache.sensors[idx];
+            let v = parseFloat( $("#sensorCfgTmin").val() );
+            if (!isNaN(v))
+                cs["tMin"] = v;
+
+            v = parseFloat( $("#sensorCfgTmax").val() );
+            if (!isNaN(v))
+                cs["tMax"] = v;
+
+            v = parseFloat( $("#sensorCfgRhmin").val() );
+            if (!isNaN(v))
+                cs["rhMin"] = v;
+
+            v = parseFloat( $("#sensorCfgRhmax").val() );
+            if (!isNaN(v))
+                cs["rhMax"] = v;
+
+            v = $("#sensorCfgIdOutside").val();
+            if (v != "")
+                cs["idOutside"] = v;
+
             $.ajax({
                 url: '/config',
                 type: 'post',

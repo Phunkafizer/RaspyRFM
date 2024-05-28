@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import sys, time, threading, math, json, os, argparse, shutil
+import sys, time, threading, math, json, os, argparse, shutil, re
 from raspyrfm import *
 import sensors
 from datetime import datetime
@@ -20,6 +20,7 @@ event.set()
 rfmlock = threading.Lock()
 reloadConf = True
 config = {}
+cache = {}
 
 script_dir = os.path.dirname(os.path.realpath(__file__))
 if not os.path.exists(script_dir + "/868gw.conf"):
@@ -29,6 +30,7 @@ if not os.path.exists(script_dir + "/868gw.conf"):
 		shutil.copyfile(script_dir + "/868gw.conf.tmpl", script_dir + "/868gw.conf")
 with open(script_dir + "/868gw.conf") as jfile:
     config = json.load(jfile)
+    jfile.close()
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-m", "--module", type=int, metavar="1-4", help=u"RaspyRFM module 1-4", default=0)
@@ -61,15 +63,16 @@ except Exception as ex:
     influxClient = None
     print("InfluxDB1 Exception:", ex)
 
+influxClient2 = None
 try:
     import influxdb_client
     from influxdb_client import InfluxDBClient, Point, WritePrecision
     from influxdb_client.client.write_api import SYNCHRONOUS
-    influxClient2 = influxdb_client.InfluxDBClient(url=config["influxdb2"]["url"], token=config["influxdb2"]["token"], org=config["influxdb2"]["org"])
-    influxapi = influxClient2.write_api(write_options=SYNCHRONOUS)
-    print("InfluxDB2 client loaded")
+    if config["influxdb2"]["url"] != "":
+        influxClient2 = influxdb_client.InfluxDBClient(url=config["influxdb2"]["url"], token=config["influxdb2"]["token"], org=config["influxdb2"]["org"])
+        influxapi = influxClient2.write_api(write_options=SYNCHRONOUS)
+        print("InfluxDB2 client loaded")
 except Exception as ex:
-    influxClient2 = None
     print("InfluxDB2 Exception:", ex)
 
 try:
@@ -109,51 +112,68 @@ paramChanger = rfmparam.ParamChanger(rfm, event, rfmlock,
     ]
 )
 
-def getCacheSensor(id, sensorConfig = None):
-    sensor = None
-    if (id in cache) and ((datetime.now() - cache[id]["ts"]).total_seconds() < 180):
-        sensor = cache[id]["payload"]
-        if sensorConfig is not None:
-            if ('tMax' in sensorConfig) and (sensor["T"] > sensorConfig["tMax"]):
-                sensor["tStatus"] = "high"
+def getCachePayload(id):
+    if not (id in cache) or ((datetime.now() - cache[id]["ts"]).total_seconds() > 300):
+        return None
 
-            if ('tMin' in sensorConfig) and (sensor["T"] < sensorConfig["tMin"]):
-                sensor["tStatus"] = "low"
+    payload = cache[id]["payload"]
 
-            if ('tStatus' not in sensor) and ('tMax' in sensorConfig or 'tMin' in sensorConfig):
-                sensor["tStatus"] = "ok"
+    sensorConfig = None
+    for csens in config["sensors"]:
+        if id == csens["id"]:
+            sensorConfig = csens
+            break
 
-            if ('isOutside' in sensorConfig):
-                sensor["isOutside"] = sensorConfig['isOutside']
+    if sensorConfig is not None:
+        payload["room"] = sensorConfig["name"]
+        if 'tMax' in sensorConfig or 'tMin' in sensorConfig:
+            payload["tStatus"] = "ok"
 
-            if ('RH' in sensor):
-                outSensor = getCacheSensor(sensorConfig["idOutside"]) if 'idOutside' in sensorConfig else None
-                if (outSensor is not None) and ('AH' in outSensor):
-                    sensor["AHratio"] = round((outSensor["AH"] / sensor["AH"] - 1) * 100)
-                    sensor["RHvent"] = round(outSensor["VP"] / sensor["SVP"] * 100)
+            if ('tMax' in sensorConfig) and (payload["T"] > sensorConfig["tMax"]):
+                payload["tStatus"] = "high"
 
-                if ('rhMax' in sensorConfig) and (sensor["RH"] > sensorConfig["rhMax"]):
-                    #too wet!
-                    sensor["rhStatus"] = "high"
-                    if "AHratio" in sensor:
-                        if sensor["AHratio"] <= -10:
-                            sensor["window"] = "open"
-                        elif sensor["AHratio"] >= 10:
-                            sensor["window"] = "close"
+            if ('tMin' in sensorConfig) and (payload["T"] < sensorConfig["tMin"]):
+                payload["tStatus"] = "low"
 
-                if ('rhMin' in sensorConfig) and (sensor["RH"] < sensorConfig["rhMin"]):
-                    #too dry
-                    sensor["rhStatus"] = "low"
-                    if "AHratio" in sensor:
-                        if sensor["AHratio"] >= 10:
-                            sensor["window"] = "open"
-                        elif sensor["AHratio"] <= -10:
-                            sensor["window"] = "close"
+        if ('isOutside' in sensorConfig):
+            payload["isOutside"] = sensorConfig['isOutside']
 
-                if 'rhStatus' not in sensor and ('rhMin' in sensorConfig or 'rhMax' in sensorConfig):
-                    sensor["rhStatus"] = "ok"
+        if ('RH' in payload):
+            outPayload = getCachePayload(sensorConfig["idOutside"]) if 'idOutside' in sensorConfig else None
+            if (outPayload is not None) and ('AH' in outPayload):
+                payload["AHratio"] = round((outPayload["AH"] / payload["AH"] - 1) * 100)
+                payload["RHvent"] = round(outPayload["VP"] / payload["SVP"] * 100)
 
-    return sensor
+            if ('rhMax' in sensorConfig) and (payload["RH"] > sensorConfig["rhMax"]):
+                #too wet!
+                payload["rhStatus"] = "high"
+                if "AHratio" in payload:
+                    if payload["AHratio"] <= -10:
+                        payload["window"] = "open"
+                    elif payload["AHratio"] >= 10:
+                        payload["window"] = "close"
+
+            if ('rhMin' in sensorConfig) and (payload["RH"] < sensorConfig["rhMin"]):
+                #too dry
+                payload["rhStatus"] = "low"
+                if "AHratio" in payload:
+                    if payload["AHratio"] >= 10:
+                        payload["window"] = "open"
+                    elif payload["AHratio"] <= -10:
+                        payload["window"] = "close"
+
+            if 'rhStatus' not in payload and ('rhMin' in sensorConfig or 'rhMax' in sensorConfig):
+                payload["rhStatus"] = "ok"
+
+            if 'Tsurf' in sensorConfig:
+                aw = round(climatools.calcAw(payload['T'], payload['RH'], sensorConfig['Tsurf']))
+                if aw > 100:
+                    aw = 100
+                payload["aw"] = aw
+                awWarn = sensorConfig["awWarn"] if 'awWarn' in sensorConfig else 80
+                payload["awStatus"] = 'high' if aw >= awWarn else 'ok'
+
+    return payload
 
 class MyHttpRequestHandler(BaseHTTPRequestHandler):
     def getdata(self):
@@ -166,22 +186,20 @@ class MyHttpRequestHandler(BaseHTTPRequestHandler):
         lock.acquire()
         for csens in config["sensors"]:
             id = csens["id"]
-            sensor = getCacheSensor(id, csens)
-            if sensor is not None:
+            payload = getCachePayload(id)
+            if payload is not None:
                 idlist.append(id)
             else:
-                sensor = {}
-                sensor["room"] = csens["name"]
-            sensor["id"] = id
-            resp["sensors"].append(sensor)
+                payload = {"room": csens["name"], "id": id}
+            resp["sensors"].append(payload)
 
         for id in cache:
             if id in idlist:
                 continue
 
-            sensor = getCacheSensor(id)
-            if sensor is not None:
-                resp["sensors"].append(sensor)
+            payload = getCachePayload(id)
+            if payload:
+                resp["sensors"].append(payload)
 
         lock.release()
 
@@ -227,20 +245,18 @@ class MyHttpRequestHandler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         path = url.path
         if path == '/config':
-            print("config save!")
             content_len = int(self.headers.get('content-length'))
-            print("len:", content_len)
-            s = self.rfile.read(content_len)
-            print("read string", s)
-            conf = json.loads(s)
-            print("config now: ", conf)
             global config
-            config = conf
+            config = json.loads(self.rfile.read(content_len))
+            global script_dir
+            with open(script_dir + "/868gw.conf", "w") as jfile:
+                jfile.write(json.dumps(config))
+                jfile.close()
+            global reloadConf
             reloadConf = True
             self.send_response(200)
             self.end_headers()
             self.wfile.write(b'')
-        
 
 
 class Server(socketserver.ThreadingMixIn, socketserver.TCPServer):
@@ -251,7 +267,6 @@ class Server(socketserver.ThreadingMixIn, socketserver.TCPServer):
         self.server_activate()
     pass
 
-cache = {}
 p = config["webport"] if "webport" in config else 8080
 server = Server(('0.0.0.0', p), MyHttpRequestHandler)
 server_thread = threading.Thread(target=server.serve_forever)
@@ -261,7 +276,23 @@ server_thread.start()
 p = config["apiport"] if "apiport" in config else 1991
 apisrv = apiserver.ApiServer(p)
 
+def getTopic(sensor):
+    if "mqtt" in config and "basetopic" in config["mqtt"]:
+        topic = config["mqtt"]["basetopic"]
+    else:
+        topic = "home"
+    topic += "/" + sensor.getClass() + "/" + sensor.getId()
+    return topic
+
 while 1:
+    if reloadConf:
+        reloadConf = False
+        with open(script_dir + "/868gw.conf") as jfile:
+            config = json.load(jfile)
+        jfile.close()
+        for c in cache.values():
+            c["discSent"] = False
+
     event.wait()
     rfmlock.acquire()
     rxData = rfm.receive(paramChanger.rxLen())
@@ -288,18 +319,13 @@ while 1:
         continue
 
     lock.acquire()
-    #print("Current config", config)
-    for csens in config["sensors"]:
-        if id == csens["id"]:
-            payload["room"] = csens["name"]
-            if 'Tsurf' in csens and 'T' in sensorValues and 'RH' in sensorValues:
-                aw = round(climatools.calcAw(payload['T'], payload['RH'], csens['Tsurf']))
-                if aw > 100:
-                    aw = 100
-                payload["aw"] = aw
-                awWarn = csens["awWarn"] if 'awWarn' in csens else 80
-                payload["awStatus"] = 'high' if aw >= awWarn else 'ok'
-            break
+
+    if not id in cache:
+        cache[id] = {"discSent": False}
+    cache[id]["payload"] = payload
+    cache[id]["ts"] = datetime.now()
+
+    payload = getCachePayload(id)
 
     apipayl = {
         "decode": [{
@@ -310,12 +336,50 @@ while 1:
     }
     apisrv.send(apipayl)
 
-    if not id in cache:
-        cache[id] = {}
-    cache[id]["payload"] = payload
-    cache[id]["ts"] = datetime.now()
-    lock.release()
+    if not cache[id]["discSent"] and "room" in payload and mqttClient: # discovery not sent yet & configured
+        print("send discovery!")
+        cache[id]["discSent"] = True
 
+        basemsg = {
+            "stat_cla": "measurement",
+            "state_topic": getTopic(sensor),
+            "exp_aft": 300,
+            "device": {
+                "identifiers": [
+                    type(sensor).__name__ + id
+                ],
+                "name": type(sensor).__name__ + " " + id,
+                "manufacturer": "Seegel Systeme",
+                "suggested_area": payload["room"]
+            }
+        }
+
+        roomid = re.sub('\W|^(?=\d)','_', payload["room"])
+        roomid = re.sub('[^0-9a-zA-Z_]', '_', payload["room"])
+        roomid = re.sub('^[^a-zA-Z_]+', '', roomid)
+
+        topic = "homeassistant/sensor/raspyrfm_" + roomid + "_T/config"
+        msg = basemsg | {
+                "name": "T " + payload["room"],
+                "device_class": "temperature",
+                "unique_id": "raspyrfm_" + roomid + "_T",
+                "unit_of_meas": "°C",
+                "val_tpl": "{{ value_json['T'] }}"
+        }
+        mqttClient.publish(topic, json.dumps(msg))
+
+        if "RH" in payload:
+            topic = "homeassistant/sensor/raspyrfm_" + roomid + "_RH/config"
+            msg = basemsg | {
+                    "name": "RH " + payload["room"],
+                    "device_class": "humidity",
+                    "unique_id": "raspyrfm_" + roomid + "_RH",
+                    "unit_of_meas": "%",
+                    "val_tpl": "{{ value_json['RH'] }}"
+            }
+            mqttClient.publish(topic, json.dumps(msg))
+
+    lock.release()
 
     measurement = config["influxdb"]["measurement"] if "measurement" in config["influxdb"] else ""
     if measurement == "":
@@ -354,11 +418,6 @@ while 1:
 
     if mqttClient:
         try:
-            if "mqtt" in config and "basetopic" in config["mqtt"]:
-                topic = config["mqtt"]["basetopic"]
-            else:
-                topic = "home"
-            topic += "/" + sensor.getClass() + "/" + payload['id']
-            mqttClient.publish(topic, json.dumps(payload))
+            mqttClient.publish(getTopic(sensor), json.dumps(payload))
         except:
             print("Error writing to MQTT!")
