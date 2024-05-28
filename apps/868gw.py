@@ -135,11 +135,11 @@ def getCachePayload(id):
             if ('tMin' in sensorConfig) and (payload["T"] < sensorConfig["tMin"]):
                 payload["tStatus"] = "low"
 
-        if ('isOutside' in sensorConfig):
-            payload["isOutside"] = sensorConfig['isOutside']
+        outPayload = getCachePayload(sensorConfig["idOutside"]) if 'idOutside' in sensorConfig else None
+        if outPayload:
+            payload["Toutside"] = outPayload["T"]
 
-        if ('RH' in payload):
-            outPayload = getCachePayload(sensorConfig["idOutside"]) if 'idOutside' in sensorConfig else None
+        if ('RH' in payload):    
             if (outPayload is not None) and ('AH' in outPayload):
                 payload["AHratio"] = round((outPayload["AH"] / payload["AH"] - 1) * 100)
                 payload["RHvent"] = round(outPayload["VP"] / payload["SVP"] * 100)

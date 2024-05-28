@@ -102,10 +102,6 @@
             padding-left: 0.5em;
         }
 
-        #tempChart {
-            height: 150px;
-        }
-
         .btndiv {
             padding: 16px 0;
         }
@@ -130,7 +126,7 @@
         </div>
         <div class="row sensorsel"><canvas id="myChart"></canvas></div>
         <div class="row"><canvas id="tempChart"></canvas></div>
-        <div class="row"><canvas id="ahChart"></canvas></div>
+        <div class="row"><canvas id="rhChart"></canvas></div>
     </div>
 
     <div class="btndiv row justify-content-md-center">
@@ -210,6 +206,15 @@
                             <label>ID Außensensor</label>
                             <div class="input-group mb-3">
                                 <input id="sensorCfgIdOutside" type="text" class="form-control">
+                            </div>
+                        </div>
+                        <div class="input-group col-md-6">
+                            <label>Bauteiltemperatur</label>
+                            <div class="input-group mb-3">
+                                <input id="sensorCfgTsurf" type="text" class="form-control">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text">°C</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -348,9 +353,7 @@
             </div>
         </div>
     </div>
-
 </body>
-
 </html>
 
 <script>
@@ -367,11 +370,11 @@
                 }
             ]
         },
-        humChartData = {
+        rhChartData = {
             labels: [],
             datasets: [
                 {
-                    label: 'AH',
+                    label: 'RH',
                     backgroundColor: [],
                     data: []
                 }
@@ -507,12 +510,12 @@
             tempChartData.labels = [];
             tempChartData.datasets[0].data = [];
             tempChartData.datasets[0].backgroundColor = [];
-            tempChartData.tOutside = null;
+            tempChartData.tOutside = [];
 
-            humChartData.labels = [];
-            humChartData.datasets[0].data = [];
-            humChartData.datasets[0].backgroundColor = [];
-            humChartData.ahOutside = null;
+            rhChartData.labels = [];
+            rhChartData.datasets[0].data = [];
+            rhChartData.datasets[0].backgroundColor = [];
+            rhChartData.rhVent = [];
 
             $.each(data["sensors"], function (idx, val) {
                 let t = 'T' in val ? val["T"] : '---';
@@ -560,8 +563,11 @@
 
 
                 tempChartData.labels.push(val['room']);
-                humChartData.labels.push(val['room']);
-                tempChartData.datasets[0].data.push(val['T']);
+                rhChartData.labels.push(val['room']);
+
+                tempChartData.datasets[0].data.push(val["T"]);
+                tempChartData.tOutside.push(val["Toutside"]);
+
                 switch (val["tStatus"]) {
                     case 'high':
                     case 'low':
@@ -574,27 +580,24 @@
                         tempChartData.datasets[0].backgroundColor.push('#888');
                         break;
                 }
-                if (val["isOutside"] === true)
-                    tempChartData.tOutside = val['T'];
 
-                humChartData.datasets[0].data.push(val['AH']);
+                rhChartData.datasets[0].data.push(val['RH']);
+                rhChartData.rhVent.push(val["RHvent"]);
                 switch (val["rhStatus"]) {
                     case 'high':
                     case 'low':
-                        humChartData.datasets[0].backgroundColor.push('#A00');
+                        rhChartData.datasets[0].backgroundColor.push('#A00');
                         break;
                     case 'ok':
-                        humChartData.datasets[0].backgroundColor.push('#394');
+                        rhChartData.datasets[0].backgroundColor.push('#394');
                         break;
                     default:
-                        humChartData.datasets[0].backgroundColor.push('#888');
+                        rhChartData.datasets[0].backgroundColor.push('#888');
                         break;
                 }
-                if (val["isOutside"] === true)
-                    humChartData.ahOutside = val['AH'];
             });
 
-            ahChart.update();
+            rhChart.update();
             tempChart.update();
 
             $("div.sensor")
@@ -656,7 +659,7 @@
                             },
                             scaleLabel: {
                                 display: true,
-                                labelString: 'T °C'
+                                labelString: 'T / °C'
                             }
                         }
                     ]
@@ -671,26 +674,33 @@
             plugins: [
                 {
                     afterDraw: function (chart) {
-                        if (chart.data.tOutside === null)
-                            return;
                         var ctxPlugin = chart.chart.ctx;
-                        var xAxe = chart.scales[chart.config.options.scales.xAxes[0].id];
                         var yAxe = chart.scales[chart.config.options.scales.yAxes[0].id];
                         ctxPlugin.strokeStyle = "#FE0";
-                        ctxPlugin.beginPath();
-                        lineAt = (chart.data.tOutside - yAxe.min) * (100 / (yAxe.max - yAxe.min));
-                        lineAt = (100 - lineAt) / 100 * (yAxe.height) + yAxe.top;
-                        ctxPlugin.moveTo(xAxe.left, lineAt);
-                        ctxPlugin.lineTo(xAxe.right, lineAt);
-                        ctxPlugin.stroke();
+
+                        const meta = chart.getDatasetMeta(0);
+                        meta.data.forEach((val, idx) => {
+                            let x = val._model.x;
+                            let wh = val._model.width / 2 + 3;
+                            let to = chart.data.tOutside[idx];
+                            if (!to)
+                                return false;
+
+                            ctxPlugin.beginPath();
+                            lineAt = (to - yAxe.min) * (100 / (yAxe.max - yAxe.min));
+                            lineAt = (100 - lineAt) / 100 * (yAxe.height) + yAxe.top;
+                            ctxPlugin.moveTo(x - wh, lineAt);
+                            ctxPlugin.lineTo(x + wh, lineAt);
+                            ctxPlugin.stroke();
+                        });
                     }
                 }
             ]
         });
 
-        ahChart = new Chart($("#ahChart"), {
+        rhChart = new Chart($("#rhChart"), {
             type: 'bar',
-            data: humChartData,
+            data: rhChartData,
             options: {
                 scales: {
                     xAxes: [
@@ -711,7 +721,7 @@
                             },
                             scaleLabel: {
                                 display: true,
-                                labelString: 'AH g / m³'
+                                labelString: 'RH / %'
                             }
                         }
                     ]
@@ -726,18 +736,24 @@
             plugins: [
                 {
                     afterDraw: function (chart) {
-                        if (chart.data.ahOutside === null)
-                            return;
                         var ctxPlugin = chart.chart.ctx;
-                        var xAxe = chart.scales[chart.config.options.scales.xAxes[0].id];
                         var yAxe = chart.scales[chart.config.options.scales.yAxes[0].id];
                         ctxPlugin.strokeStyle = "#FE0";
-                        ctxPlugin.beginPath();
-                        lineAt = (chart.data.ahOutside - yAxe.min) * (100 / (yAxe.max - yAxe.min));
-                        lineAt = (100 - lineAt) / 100 * (yAxe.height) + yAxe.top;
-                        ctxPlugin.moveTo(xAxe.left, lineAt);
-                        ctxPlugin.lineTo(xAxe.right, lineAt);
-                        ctxPlugin.stroke();
+                        const meta = chart.getDatasetMeta(0);
+                        meta.data.forEach((val, idx) => {
+                            let x = val._model.x;
+                            let wh = val._model.width / 2 + 3;
+                            let rhv = chart.data.rhVent[idx];
+                            if (!rhv)
+                                return false;
+
+                            ctxPlugin.beginPath();
+                            lineAt = (rhv - yAxe.min) * (100 / (yAxe.max - yAxe.min));
+                            lineAt = (100 - lineAt) / 100 * (yAxe.height) + yAxe.top;
+                            ctxPlugin.moveTo(x - wh, lineAt);
+                            ctxPlugin.lineTo(x + wh, lineAt);
+                            ctxPlugin.stroke();
+                        });
                     }
                 }
             ]
@@ -747,6 +763,14 @@
 
         $.getJSON('/config', '', function (data) {
             configCache = data;
+            outsideIds = [];
+
+            for (csens of data["sensors"]) {
+                if ("idOutside" in csens) {
+                    if (outsideIds.indexOf(csens["idOutside"]) == -1)
+                        outsideIds.push(csens["idOutside"]);
+                }
+            }
 
             if ('mqtt' in data) {
                 $('#mqttHost').val(data.mqtt.server);
@@ -785,6 +809,7 @@
                     $("#sensorCfgRhmin").val(val.rhMin);
                     $("#sensorCfgRhmax").val(val.rhMax);
                     $("#sensorCfgIdOutside").val(val.idOutside);
+                    $("#sensorCfgTsurf").val(val.Tsurf);
                     return false;
                 }
             });
@@ -824,6 +849,10 @@
             v = $("#sensorCfgIdOutside").val();
             if (v != "")
                 cs["idOutside"] = v;
+
+            v = parseFloat( $("#sensorCfgTsurf").val() );
+            if (!isNaN(v))
+                cs["Tsurf"] = v;
 
             $.ajax({
                 url: '/config',

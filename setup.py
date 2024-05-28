@@ -17,7 +17,7 @@ setuptools.setup(
 	zip_safe=False,
 	install_requires=[
 		"spidev",
-		"RPi.GPIO"
+		"rpi-lgpio"
 	]
 )
 
