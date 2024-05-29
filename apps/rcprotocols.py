@@ -182,7 +182,7 @@ class TristateBase(RcPulse): #Baseclass for old intertechno, Brennenstuhl, ...
 	def __init__(self):
 		if not hasattr(self, "_timebase"):
 			self._timebase = 300
-		self._repetitions = 4
+		self._repetitions = 12
 		self._pattern = "[01F]{12}"
 		self._symbols = {
 			'0': [1, 3, 1, 3],
@@ -293,7 +293,7 @@ class PPM1(RcPulse): #Intertechno, Hama, Nexa, Telldus, ...
 	'''
 	def __init__(self):
 		self._timebase = 250
-		self._repetitions = 4
+		self._repetitions = 10
 		self._pattern = "[01]{32}"
 		self._header = [1, 11]
 		self._symbols = {
@@ -374,7 +374,7 @@ class PWM1(RcPulse):
 	'''
 	def __init__(self):
 		self._timebase = 300
-		self._repetitions = 6
+		self._repetitions = 10
 		self._pattern = "[01]{24}"
 		self._symbols = {
 			'1': [3, 1],
@@ -449,7 +449,7 @@ class FS20(RcPulse):
 	def __init__(self):
 		self._name = "fs20"
 		self._timebase = 200
-		self._repetitions = 6
+		self._repetitions = 10
 		self._pattern = "0000000000001[01]{45}"
 		self._symbols = {
 			'0': [2, 2],
@@ -501,7 +501,7 @@ class Voltcraft(RcPulse):
 	def __init__(self):
 		self._name = "voltcraft"
 		self._timebase = 600
-		self._repetitions = 4
+		self._repetitions = 10
 		self._pattern = "[01]{20}"
 		self._symbols = {
 			'0': [1, 2],
@@ -560,7 +560,7 @@ class PilotaCasa(RcPulse):
 	def __init__(self):
 		self._name = "pilota"
 		self._timebase = 550
-		self._repetitions = 5
+		self._repetitions = 10
 		self._pattern = "[01]{32}"
 		self._symbols = {
 			'1': [1, 2],
@@ -631,7 +631,7 @@ class REVRitterShutter(RcPulse):
 	def __init__(self):
 		self._name = "revshutter"
 		self._timebase = 200
-		self._repetitions = 4
+		self._repetitions = 10
 		self._pattern = "[01]{24}"
 		self._symbols = {
 			'0': [1, 3],
