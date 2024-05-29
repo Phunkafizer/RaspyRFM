@@ -366,7 +366,7 @@ while 1:
                 "unit_of_meas": "°C",
                 "val_tpl": "{{ value_json['T'] }}"
         }
-        mqttClient.publish(topic, json.dumps(msg))
+        mqttClient.publish(topic, json.dumps(msg), 2, True)
 
         if "RH" in payload:
             topic = "homeassistant/sensor/raspyrfm_" + roomid + "_RH/config"
@@ -377,7 +377,7 @@ while 1:
                     "unit_of_meas": "%",
                     "val_tpl": "{{ value_json['RH'] }}"
             }
-            mqttClient.publish(topic, json.dumps(msg))
+            mqttClient.publish(topic, json.dumps(msg), 2, True)
 
     lock.release()
 
