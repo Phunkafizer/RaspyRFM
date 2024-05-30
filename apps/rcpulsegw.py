@@ -69,11 +69,9 @@ def on_connect(client, userdata, flags, rc, props):
 	print("Connected MQTT with result code "+str(rc))
 	if rc == 0:
 		client.subscribe(MQTT_BASE_TOPIC + "/#")
-	#client.connected_flag = rc == 0
 
-def on_disconnect(client, userdata, rc):
+def on_disconnect(client, userdata, flags, rc, props):
 	print("MQTT disconnected")
-	#client.connected_flag = False
 
 def on_message(client, userdata, msg):
 	tl = msg.topic.split("/")

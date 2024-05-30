@@ -75,9 +75,18 @@ try:
 except Exception as ex:
     print("InfluxDB2 Exception:", ex)
 
+def on_connect(client, userdata, flags, rc, props):
+        print("Connected MQTT with result code "+str(rc))
+
+def on_disconnect(client, userdata, flags, rc, props):
+        print("MQTT disconnected")
+
 try:
     import paho.mqtt.client as mqtt
     mqttClient = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+    mqttClient.loop_start()
+    mqttClient.on_connect = on_connect
+    mqttClient.on_disconnect = on_disconnect
     mqttClient.username_pw_set(
         config["mqtt"]["user"] if ("mqtt" in config) and ("user" in config["mqtt"]) else "",
         config["mqtt"]["pass"] if ("mqtt" in config) and ("pass" in config["mqtt"]) else None,
@@ -87,7 +96,6 @@ try:
         config["mqtt"]["port"] if ("mqtt" in config) and ("port" in config["mqtt"]) else 1883,
         30
     )
-    mqttClient.loop_start()
 except Exception as ex:
     mqttClient = None
     print("MQTT init error:", ex)

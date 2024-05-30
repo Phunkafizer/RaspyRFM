@@ -208,13 +208,33 @@
                                 <input id="sensorCfgIdOutside" type="text" class="form-control">
                             </div>
                         </div>
+                   </div>
+
+                   <label>Bauteile Temperatur</label>
+                   <div class="form-row">
                         <div class="input-group col-md-6">
-                            <label>Bauteiltemperatur</label>
+                            <div class="">
+                                <label>
+                                    <input type="radio" name="tcrittype" value="0"> Vorgabe
+                                </label>
+                                <label>
+                                    <input type="radio" name="tcrittype" value="1"> berechnet
+                                </label>
+                            </div>
+                        </div>
+                        <div id="divTsurf" class="input-group col-md-6">
+                            <label>T crit</label>
                             <div class="input-group mb-3">
                                 <input id="sensorCfgTsurf" type="text" class="form-control">
                                 <div class="input-group-prepend">
                                     <span class="input-group-text">°C</span>
                                 </div>
+                            </div>
+                        </div>
+                        <div id="divCritCalib" class="input-group col-md-6">
+                            <label>crit calib</label>
+                            <div class="input-group mb-3">
+                                <input id="sensorCfgCritCalib" type="text" class="form-control">
                             </div>
                         </div>
                     </div>
@@ -854,6 +874,19 @@
             if (!isNaN(v))
                 cs["Tsurf"] = v;
 
+            switch ( $('input[name="tcrittype"]:checked').val() ) {
+            case '0':
+                v = parseFloat($("#sensorCfgTsurf").val());
+                if (!isNaN(v))
+                    cs["Tsurf"] = v;
+                break;
+            case '1':
+                v = parseFloat($("#sensorCfgCritCalib").val());
+                if (!isNaN(v))
+                    cs["critCalib"] = v;
+                break;
+            }
+
             $.ajax({
                 url: '/config',
                 type: 'post',
@@ -872,6 +905,20 @@
                 data: JSON.stringify(configCache),
                 contentType:"application/json"
             });
-        })
+        });
+
+        $('input[name="tcrittype"]').change(function(e) {
+            switch (e.target.value) {
+            case '0':
+                $('#divTsurf').show();
+                $('#divCritCalib').hide();
+                break;
+            case '1':
+                $('#divTsurf').hide();
+                $('#divCritCalib').show();
+                break;
+            }
+            
+        });
     });
 </script>
