@@ -450,7 +450,7 @@
         var tData = [];
         var rhData = [];
 
-        $.getJSON("/history",
+        $.getJSON("history",
             { 'name': sensor['room'] },
             function (data) {
                 $.each(data, function (idx, val) {
@@ -523,7 +523,7 @@
     }
 
     function loadValues() {
-        $.getJSON("/data", function (data) {
+        $.getJSON("data", function (data) {
             dataCache = data;
             $("#sensorrow").empty();
 
@@ -781,7 +781,7 @@
 
         loadValues();
 
-        $.getJSON('/config', '', function (data) {
+        $.getJSON('config', '', function (data) {
             configCache = data;
             outsideIds = [];
 
@@ -888,7 +888,7 @@
             }
 
             $.ajax({
-                url: '/config',
+                url: 'config',
                 type: 'post',
                 data: JSON.stringify(configCache),
                 contentType:"application/json"
