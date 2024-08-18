@@ -538,6 +538,8 @@
             rhChartData.rhVent = [];
 
             $.each(data["sensors"], function (idx, val) {
+                if ( !(('T' in val) || ('room' in val)) )
+                    return false;
                 let t = 'T' in val ? val["T"] : '---';
                 let rh = ('RH' in val) ? val["RH"] : '---';
                 let ah = ('AH' in val) ? val["AH"] : '---';

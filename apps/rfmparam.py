@@ -26,10 +26,12 @@ class ParamChanger(threading.Thread):
 
             bd = self.__params[i]["baudrate"]
             self.__rxlen = self.__params[i]["rxlen"]
+            sync = self.__params[i]["sync"]
 
             print("Switch baudrate to " + str(bd) + " kbit/s")
             self.__mutex.acquire()
             self.__rfm.set_params(Datarate = bd)
+            self.__rfm.set_params(SyncPattern = sync)
             self.__mutex.release()
             self.__event.set()
             time.sleep(self.__params[i]["duration"])

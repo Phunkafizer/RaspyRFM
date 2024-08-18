@@ -277,7 +277,7 @@ class Bresser7in1(WeatherSensor):
 
         return Bresser7in1(msg, rssi, fei)
 
-class EC3000(BaseSensor):
+class EC3000(EnergySensor):
     def __init__(self, nibbles, rssi, fei):
         id = f'{nibblesToInt(nibbles[1:5])}'
         BaseSensor.__init__(self, id, rssi, fei)
@@ -352,12 +352,12 @@ class EC3000(BaseSensor):
         if len(msg) < 41:
             return
         msg = EC3000.__descramble(msg)
-        print(msg)
         msg = EC3000.__unstuffrev(msg[1:])
         crc = crc_ccitt16(msg[:41])
         if crc != 0xF0B8:
             return
         nibbles = toNibbles(msg)
+
         if nibbles[0] != 9:
             return
         for n in nibbles[9:13] + nibbles[17:24] + nibbles[62:67] + nibbles[77:78]:
