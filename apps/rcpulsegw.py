@@ -71,7 +71,7 @@ def on_connect(client, userdata, flags, rc, props):
 		client.subscribe(MQTT_BASE_TOPIC + "/#")
 	#client.connected_flag = rc == 0
 
-def on_disconnect(client, userdata, rc):
+def on_disconnect(client, userdata, flags, rc, props):
 	print("MQTT disconnected")
 	#client.connected_flag = False
 
