@@ -25,7 +25,8 @@ class RcCodec:
 	def __init__(self):
 		self.__lastDecodeParams = {}
 		self.__lastDecodeTime = 0
-		self._repetitions = 4
+		if not hasattr(self, "_repetitions"):
+			self._repetitions = 4
 
 	def _decodeSymbols(self, pulseBuf):
 		pbi = 0
@@ -191,7 +192,6 @@ class RcCodec:
 			if timebase is None:
 				timebase = self._timebase
 
-			print(self.__ookdata, repets, timebase)
 			return self.__ookdata * repets, timebase
 
 
@@ -200,10 +200,12 @@ class Tristate(RcCodec):
 	Baseclass for old intertechno, Brennenstuhl RCS 1000, ...
 	'''
 	def __init__(self):
+		RcCodec.__init__(self)
 		self._timebase = 300
 		self._autoTimebase = (4, 200, 450) # symbols, min, max
 		self._rxq = 2 # rx quality factor q, matching windows s-(s/q) <= x <= s+(s/q)
 		self._footer = [1, 31]
+		self._repetitions = 12
 		self._symbols = {
 			'0': [1, 3, 1, 3],
 			'1': [3, 1, 3, 1],
@@ -214,7 +216,6 @@ class Tristate(RcCodec):
 		self._pattern = "[01FX]{12}"
 		self._name = "tristate"
 		self._class = CLASS_RCSWITCH
-		RcCodec.__init__(self)
 
 	def _decodeInt(self, tristateval):
 		i = 0
@@ -311,8 +312,8 @@ class PPM32(RcCodec):
 	def __init__(self):
 		self._name = "intertechno"
 		self._timebase = 275
+		self._repetitions = 10
 		self._autoTimebase = (24, 225, 350) # symbols, min, max
-		self._numsymbols = 32 # numSymbols; dimmers may have for symbols
 		self._rxq = 3 # rx quality factor q, matching windows s-(s/q) <= x <= s+(s/q)
 		self._header = [1, 60]
 		self._footer = [1, 39]
@@ -509,7 +510,7 @@ class PilotaCasa(RcCodec):
 		self._timebase = 550
 		self._autoTimebase = (32, 450, 650) # symbols, min, max
 		self._rxq = 3 # rx quality factor q, matching windows s-(s/q) <= x <= s+(s/q)
-		self._repetitions = 5
+		self._repetitions = 10
 		self._pattern = "[01]{32}"
 		self._symbols = {
 			'1': [1, 2],
@@ -1153,7 +1154,6 @@ class RcTransceiver(threading.Thread):
 		if proto:
 			try:
 				txdata, tb = proto.encode(params, timebase, repeats)
-				print(txdata, tb)
 				self.__rfmtrx.send(txdata, tb)
 				if self.__statecb:
 					topic, msg = proto.getMqttFromParams(params)
