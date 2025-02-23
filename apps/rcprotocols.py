@@ -31,7 +31,7 @@ class RcCodec:
 		pbi = 0
 		if hasattr(self, "_header"):
 			pbi = len(self._header)
-		
+
 		pbmax = len(pulseBuf)
 		if hasattr(self, "_footer"):
 			pbmax -= len(self._footer)
@@ -77,7 +77,7 @@ class RcCodec:
 					if (pulseBuf[pbi + idx] < win[0]) or (pulseBuf[pbi + idx] > win[1]):
 						match = False
 						break
-				
+
 				if match:
 					symfound = True
 					symbuf += symkey
@@ -86,19 +86,19 @@ class RcCodec:
 
 			if not symfound:
 				return
-			
+
 		if hasattr(self, "_pattern"):
 			if not re.match("^" + self._pattern + "$", symbuf):
 				return
-			
+
 		return symbuf, timebase #return decoded symbols and (measured) timebase
-	
+
 	def _decodeCommand(self, symbols):
 		for k in self._commands:
 			if self._commands[k] == symbols:
 				return k
 		raise Exception("Unknown command")
-	
+
 	def _encodeCommand(self, command):
 		for key in self._commands:
 			if key.lower() == command.lower():
@@ -117,7 +117,7 @@ class RcCodec:
 			topic += '/' + str(v).upper()
 		payload = tmp[-1]
 		return (topic, payload)
-	
+
 	def decode(self, pulseBuf):
 		temp = self._decodeSymbols(pulseBuf)
 		if temp is not None:
@@ -137,7 +137,7 @@ class RcCodec:
 				"symbols": temp[0],
 				"timebase": temp[1]
 			}, repeated, self.getMqttFromParams(params)
-		
+
 	def __addPulses(self, pulses):
 		for pulse in pulses:
 			self.__bval ^= 1
@@ -191,6 +191,7 @@ class RcCodec:
 			if timebase is None:
 				timebase = self._timebase
 
+			print(self.__ookdata, repets, timebase)
 			return self.__ookdata * repets, timebase
 
 
@@ -223,22 +224,22 @@ class Tristate(RcCodec):
 				i |= 1
 			tristateval = tristateval[:-1]
 		return i
-	
+
 	def _encodeInt(self, ival, digits):
 		code = ""
 		for i in range(digits):
 			code += "F" if (ival & 0x01) > 0 else "0"
 			ival >>= 1
 		return code
-	
+
 	def _decode(self, symbols):
 		return {
 			"code": symbols
 		}
-	
+
 	def _encode(self, params):
 		return params["code"].upper()
-		
+
 class ITTristate(Tristate):
 	def __init__(self):
 		Tristate.__init__(self)
@@ -258,7 +259,7 @@ class ITTristate(Tristate):
 			"unit": unit,
 			"command": command
 		}
-	
+
 	def _encode(self, params):
 		symbols = ""
 		house = params["house"].upper()[0]
@@ -269,7 +270,7 @@ class ITTristate(Tristate):
 		symbols += self._encodeCommand(params["command"])
 		return symbols
 
-	
+
 class BrennenstuhlRCS1000(Tristate):
 	def __init__(self):
 		Tristate.__init__(self)
@@ -304,8 +305,8 @@ class BrennenstuhlRCS1000(Tristate):
 		symbols += self._encodeCommand(params["command"])
 		return symbols
 
-	
-		
+
+
 class PPM32(RcCodec):
 	def __init__(self):
 		self._name = "intertechno"
@@ -348,7 +349,7 @@ class Intertechno(PPM32):
 			"unit": unit,
 			"command": command
 		}
-	
+
 	def _encodeUnit(self, unit):
 		return "{:04b}".format(int(unit) - 1)
 
@@ -364,7 +365,7 @@ class Intertechno(PPM32):
 			symbols += self._encodeCommand(params["command"])
 
 		symbols += self._encodeUnit(params["unit"])
-		
+
 		if dim:
 			dim = int(round(15*dim/100.0))
 			if dim > 15:
@@ -372,7 +373,7 @@ class Intertechno(PPM32):
 			symbols += "{:04b}".format(dim)
 
 		return symbols
-	
+
 
 class Hama(Intertechno):
 	def __init__(self):
@@ -386,7 +387,7 @@ class Hama(Intertechno):
 
 	def _encodeUnit(self, unit):
 		return "{:04b}".format(16 - int(unit))
-	
+
 
 class PWM24(RcCodec):
 	'''
@@ -424,7 +425,7 @@ class PWM24(RcCodec):
 			"id": self._decodeBinLSB(symbols[:20]),
 			"data": self._decodeBinLSB(symbols[20:24])
 		}
-	
+
 	def _encode(self, params):
 		symbols = ""
 		symbols += self._encodeBinLsb(int(params["id"]), 20)
@@ -449,7 +450,7 @@ class Logilight(PWM24):
 			"unit": unit,
 			"command": command
 		}
-	
+
 	def _encode(self, params):
 		symbols = ""
 		symbols += "{:020b}".format(int(params["id"]))
@@ -458,7 +459,7 @@ class Logilight(PWM24):
 		if (params["command"].lower() == "learn"):
 			return symbols, 10
 		return symbols
-	
+
 class Emylo(PWM24):
 	def __init__(self):
 		PWM24.__init__(self)
@@ -480,7 +481,7 @@ class Emylo(PWM24):
 		symbols += self._encode_command(params["command"])
 		return symbols
 
-	
+
 class PilotaCasa(RcCodec):
 	'''
 	Pulse Width Modulation 32 bit
@@ -528,7 +529,7 @@ class PilotaCasa(RcCodec):
 				"unit": c[1],
 				"command": c[2]
 			}
-		
+
 	def _encode(self, params):
 		symbols = '01'
 		u = None
@@ -1152,6 +1153,7 @@ class RcTransceiver(threading.Thread):
 		if proto:
 			try:
 				txdata, tb = proto.encode(params, timebase, repeats)
+				print(txdata, tb)
 				self.__rfmtrx.send(txdata, tb)
 				if self.__statecb:
 					topic, msg = proto.getMqttFromParams(params)
