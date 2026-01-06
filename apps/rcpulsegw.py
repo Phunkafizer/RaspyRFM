@@ -81,25 +81,28 @@ def on_message(client, userdata, msg):
 	proto = tl[0]
 	tl = tl[1:-1] + [msg.payload.decode()]
 	print("TX from MQTT: " + proto + " " + str(tl))
-	rctrx.send(proto, tl)
+	try:
+
+		rctrx.send(proto, tl)
+	except Exception as e:
+		print(f"Error sending {proto}: {e}")
 
 
 if mqttClient:
-	mqttClient.connected_flag = False
 	mqttClient.loop_start()
 	mqttClient.on_connect = on_connect
 	mqttClient.on_disconnect = on_disconnect
 	mqttClient.on_message = on_message
-	mqttClient.username_pw_set(
-		config["mqtt"]["user"] if ("mqtt" in config) and ("user" in config["mqtt"]) else "",
-		config["mqtt"]["pass"] if ("mqtt" in config) and ("pass" in config["mqtt"]) else None,
-	)
+	user = config["mqtt"]["user"] if ("mqtt" in config) and ("user" in config["mqtt"]) else ""
+	pw = config["mqtt"]["pass"] if ("mqtt" in config) and ("pass" in config["mqtt"]) else None
+	mqttClient.username_pw_set(user, pw)
 	server = config["mqtt"]["server"] if ("mqtt" in config) and ("server" in config["mqtt"]) else "127.0.0.1"
 	port = config["mqtt"]["port"] if ("mqtt" in config) and ("port" in config["mqtt"]) else 1883
 	try:
+		print("MQTT connecting to", server, ":", port, "user=", user, "pass=", pw)
 		mqttClient.connect(server, port, 30)
 	except:
-		pass
+		print("MQTT connect error:", e)
 
 while True:
 	time.sleep(1)

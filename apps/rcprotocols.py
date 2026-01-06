@@ -372,7 +372,7 @@ class Intertechno(PPM32):
 			if dim > 15:
 				dim = 15
 			symbols += "{:04b}".format(dim)
-
+		print("it symbols", symbols)
 		return symbols
 
 
@@ -1065,6 +1065,7 @@ class RfmPulseTRX(threading.Thread):
 		while True:
 			fifo = self.__rfm.read_fifo_wait(64)
 			if len(fifo) == 0:
+				time.sleep(0.01)
 				return
 
 			for b in fifo:

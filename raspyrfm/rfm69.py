@@ -475,6 +475,8 @@ class Rfm69(rfmbase.RfmBase):
 
 			if (flags == 0) and ready:
 				break
+			self.__irqEvent.clear()
+			self.__irqEvent.wait(timeout=0.01)
 		return ret
 
 	def GetNoiseFloor(self):
