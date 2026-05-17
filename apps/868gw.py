@@ -13,8 +13,10 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse
 import json
 from urllib.parse import urlparse, parse_qs
+import sqlite3
 
 lock = threading.Lock()
+dblock = threading.Lock()
 event = threading.Event()
 event.set()
 rfmlock = threading.Lock()
@@ -49,13 +51,15 @@ if rfm == None:
 
 try:
     from influxdb import InfluxDBClient
+    host = config["influxdb"]["host"]
+    if host == "":
+        raise Exception("No host given")
     influxClient = InfluxDBClient(
-        host=config["influxdb"]["host"],
+        host=host,
         port=config["influxdb"]["port"],
         username=config["influxdb"]["user"],
         password=config["influxdb"]["pass"]
     )
-
     influxClient.switch_database(config["influxdb"]["database"])
     print("InfluxDB1 client loaded")
 
@@ -74,6 +78,36 @@ try:
         print("InfluxDB2 client loaded")
 except Exception as ex:
     print("InfluxDB2 Exception:", ex)
+
+sql = None
+def sql_purge():
+    cur = sql.cursor()
+    while True:
+        time.sleep(300)
+        dblock.acquire()
+        print("Cleaning up SQL DB")
+        cur.execute("""
+            DELETE FROM sensors WHERE ts < (datetime('now', '-6 hours', 'localtime'))
+        """)
+        sql.commit()
+        dblock.release()
+try:
+    sql = sqlite3.connect(":memory:", check_same_thread = False)
+    cursor = sql.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS sensors (
+            id VAR_CHAR(12),
+            ts datetime DEFAULT (datetime('now', 'localtime')),
+            t float,
+            rh float,
+            ah float
+        )
+    """)
+    sql.commit()
+    threading.Thread(target=sql_purge).start()
+
+except:
+    pass
 
 def on_connect(client, userdata, flags, rc, props):
         print("Connected MQTT with result code "+str(rc))
@@ -217,8 +251,6 @@ class MyHttpRequestHandler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         p = url.path
         q = parse_qs(url.query)
-        if 'name' in q:
-            name = q['name'][0]
 
         if p == '/data':
             self.getdata()
@@ -237,15 +269,29 @@ class MyHttpRequestHandler(BaseHTTPRequestHandler):
             with open(script_dir + '/index.html', 'rb') as file:
                 self.wfile.write(file.read())
 
-        elif p == '/history' and influxClient and name:
-            resp = influxClient.query(
-                "SELECT mean(mean_T), mean(mean_RH) FROM rp_1w.weather WHERE (sensor = $name) AND time >= now() - 4h GROUP BY time(3m) fill(none)",
-                bind_params={'name': name}
-                )
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(resp.raw['series'][0]['values']).encode())
+        elif p == '/history':
+            try:
+                dblock.acquire()
+                cur = sql.cursor()
+                cur.execute(F"SELECT ts, t, rh, ah from sensors WHERE id='{q['id'][0]}' AND ts >= (datetime('now', '-6 hours', 'localtime')) ORDER BY ts")
+                rows = cur.fetchall()
+                print("ROWS: ", rows)
+                res = []
+                for row in rows:
+                    res.append({
+                        "ts": row[0],
+                        "T": row[1],
+                        "RH": row[2],
+                        "AH": row[3]
+                    })
+                dblock.release()
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(res).encode())
+            except Exception as e:
+                print(e)
+                return self.send_error(404, self.responses.get(404)[0])
         else:
             return self.send_error(404, self.responses.get(404)[0])
 
@@ -313,6 +359,7 @@ while 1:
         sensor = sensors.decode(rxData)
         if not sensor:
             continue
+        print(rxData)
         print(sensor)
         sensorValues = sensor.getValues()
         payload = {}
@@ -393,6 +440,21 @@ while 1:
     if measurement == "":
         measurement = sensor.getClass()
 
+    vals = sensor.getDbValues()
+
+    if sql:
+        if 'T' in vals:
+            cursor = sql.cursor()
+            id = payload['id']
+
+            cursor.execute(F"SELECT * from sensors WHERE id='{id}' and ts > datetime('now', '-2 minutes', 'localtime')")
+            if len(cursor.fetchall()) == 0:
+                T = vals['T'][0]
+                RH = vals['RH'][0] if 'RH' in vals else "null"
+                AH = vals['AH'][0] if 'AH' in vals else "null"
+                cursor.execute(F"INSERT INTO sensors(id, t, rh, ah) VALUES('{id}', {T}, {RH}, {AH})")
+                sql.commit()
+
     if influxClient:
         try:
             wr = {
@@ -400,9 +462,8 @@ while 1:
                 "fields": {},
                 "tags": {"sensor": payload["id"] if not ("room" in payload) else payload["room"]}
             }
-            val = sensor.getDbValues()
-            for key in val:
-               wr["fields"][key] = val[key][0]
+            for key in vals:
+               wr["fields"][key] = vals[key][0]
 
             influxClient.write_points([wr])
 
@@ -415,9 +476,8 @@ while 1:
                 Point(measurement)
                 .tag("sensor", payload["id"] if not ("room" in payload) else payload["room"])
             )
-            val = sensor.getDbValues()
-            for key in val:
-               point.field(key, val[key][0])
+            for key in vals:
+               point.field(key, vals[key][0])
 
             influxapi.write(bucket=config["influxdb2"]["bucket"], org=config["influxdb2"]["org"], record=point)
 

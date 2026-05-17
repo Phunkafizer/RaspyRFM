@@ -451,16 +451,16 @@
         var rhData = [];
 
         $.getJSON("history",
-            { 'name': sensor['room'] },
+            { 'id': sensor['id'] },
             function (data) {
                 $.each(data, function (idx, val) {
                     tData.push({
-                        't': val[0],
-                        'y': val[1]
+                        't': val['ts'],
+                        'y': val['T']
                     });
                     rhData.push({
-                        't': val[0],
-                        'y': val[2]
+                        't': val['ts'],
+                        'y': val['RH']
                     });
                 });
 
