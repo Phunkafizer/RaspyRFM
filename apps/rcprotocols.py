@@ -523,9 +523,9 @@ class PilotaCasa(RcCodec):
 	def _decode(self, symbols):
 		if symbols[2:8] in self.__codes:
 			c = self.__codes[symbols[2:8]]
-			id = int(symbols[8:24][::-1], 2)
+			id = int(symbols[8:24], 2)
 			return {
-				"id": id, 
+				"id": id,
 				"group": c[0],
 				"unit": c[1],
 				"command": c[2]
@@ -546,7 +546,7 @@ class PilotaCasa(RcCodec):
 				u = k
 				break
 		symbols += u
-		symbols += "{:016b}".format(int(params["id"]))[::-1]
+		symbols += "{:016b}".format(int(params["id"]))
 		symbols += "11111111"
 		return symbols
 
