@@ -1051,6 +1051,13 @@ class RcTransceiver(threading.Thread):
 			except Exception as e:
 				print("Encode error: " + str(e))
 
+	def sendRaw(self, timings, repeats):
+		for i, t in enumerate(timings):
+			timings[i] = abs(t)
+		rcraw = RcRaw(50)
+		ook = rcraw.build_raw(timings, repeats)
+		self.__rfmtrx.send(ook, 50)
+
 	def run(self):
 		while True:
 			self.__event.wait()
