@@ -1,5 +1,6 @@
 import datetime
 import json
+import re
 import climatools
 
 def crc8(buf):
@@ -84,6 +85,8 @@ sensorRegistry = SensorRegistry()
 
 class BaseSensor:
     _dbFields = []
+    _sensorClass = 'generic'
+    _discoverySpecs = []
     def __init__(self, id, rssi, fei):
         self.__fields = {}
         self.__calcs = {}
@@ -136,8 +139,76 @@ class BaseSensor:
                 result[f] = self.__calcs[f]
         return result
 
-    def getDiscoveryPaths(self):
-        return []
+    @staticmethod
+    def _slugify(raw):
+        slug = re.sub(r'\W|^(?=\d)', '_', str(raw))
+        slug = re.sub(r'[^0-9a-zA-Z_]', '_', slug)
+        slug = re.sub(r'^[^a-zA-Z_]+', '', slug)
+        return (slug if slug else 'sensor').lower()
+
+    @staticmethod
+    def _joinUniqueId(*parts):
+        tokens = []
+        seen = set()
+        for part in parts:
+            token = BaseSensor._slugify(part)
+            if token in seen:
+                continue
+            seen.add(token)
+            tokens.append(token)
+        return '_'.join(tokens)
+
+    def getDiscoveryPaths(self, stateTopic, roomName = None, nodePrefix = 'raspyrfm', deviceIdentifier = None, deviceName = None):
+        values = self.getValues()
+        sensorId = str(self.getId())
+        sensorType = self.getType()
+        roomLabel = roomName if roomName else sensorId
+        roomSlug = BaseSensor._slugify(roomLabel)
+        idSlug = BaseSensor._slugify(sensorId)
+
+        resolvedDeviceIdentifier = BaseSensor._slugify(deviceIdentifier) if deviceIdentifier else (sensorType + sensorId)
+        resolvedDeviceName = deviceName if deviceName else (sensorType + ' ' + sensorId)
+        device = {
+            'identifiers': [resolvedDeviceIdentifier],
+            'name': resolvedDeviceName,
+            'manufacturer': 'Seegel Systeme'
+        }
+        if roomName and not deviceName:
+            device['suggested_area'] = roomName
+
+        result = []
+        for spec in self._discoverySpecs:
+            field = spec['field']
+            if field not in values:
+                continue
+
+            component = spec.get('component', 'sensor')
+            fieldToken = spec.get('suffix', field)
+            objectId = f'{nodePrefix}_{roomSlug}_{fieldToken}'
+            topic = f'homeassistant/{component}/{objectId}/config'
+            msg = {
+                'state_topic': stateTopic,
+                'exp_aft': 300,
+                'device': device,
+                'name': spec.get('name', field) + ' ' + roomLabel,
+                'unique_id': BaseSensor._joinUniqueId(nodePrefix, sensorType, fieldToken, idSlug),
+                'val_tpl': "{{ value_json['" + field + "'] }}"
+            }
+
+            if component == 'sensor':
+                if 'state_class' in spec:
+                    msg['stat_cla'] = spec['state_class']
+                if 'device_class' in spec:
+                    msg['device_class'] = spec['device_class']
+                if 'unit_of_meas' in spec:
+                    msg['unit_of_meas'] = spec['unit_of_meas']
+
+            if 'icon' in spec:
+                msg['icon'] = spec['icon']
+
+            result.append({'topic': topic, 'payload': msg})
+
+        return result
 
     def _setField(self, symbol, val, unit=None):
         self.__fields[symbol] = (val, unit)
@@ -165,6 +236,11 @@ class WeatherSensor(BaseSensor):
     minMaxFieldNames = ['T', 'RH']
     _sensorClass = 'weather'
     _dbFields = ['T', 'RH', 'DEW', 'AH']
+    _discoverySpecs = [
+        {'field': 'T', 'name': 'T', 'device_class': 'temperature', 'unit_of_meas': '°C', 'state_class': 'measurement'},
+        {'field': 'RH', 'name': 'RH', 'device_class': 'humidity', 'unit_of_meas': '%', 'state_class': 'measurement'}
+    ]
+
     def _set(self, T, RH = None):
         self._setField('T', T, '°C')
         if RH:
@@ -176,15 +252,19 @@ class WeatherSensor(BaseSensor):
             self._setCalc('TH80', climatools.calcDewPoint(T, RH, False, 80), '°C')
             self._setCalc('TH60', climatools.calcDewPoint(T, RH, False, 60), '°C')
 
-    def getDiscoveryPaths(self):
-        result = []
-        for fk in self.__fields:
-            pass
-
 
 class EnergySensor(BaseSensor):
     _sensorClass = 'energy'
     _dbFields = ['P', 'U', 'I']
+    _discoverySpecs = [
+        {'field': 'P', 'name': 'Power', 'device_class': 'power', 'unit_of_meas': 'W', 'state_class': 'measurement'},
+        {'field': 'Pmax', 'name': 'Power max', 'device_class': 'power', 'unit_of_meas': 'W', 'state_class': 'measurement'},
+        {'field': 'U', 'name': 'Voltage', 'device_class': 'voltage', 'unit_of_meas': 'V', 'state_class': 'measurement'},
+        {'field': 'I', 'name': 'Current', 'device_class': 'current', 'unit_of_meas': 'A', 'state_class': 'measurement'},
+        {'field': 'E', 'name': 'Energy', 'device_class': 'energy', 'unit_of_meas': 'kWh', 'state_class': 'total_increasing'},
+        {'field': 'onState', 'name': 'On state', 'icon': 'mdi:power-plug'}
+    ]
+
     def _set(self, P, U, I, E):
         if not P is None:
             self._setField('P', P, 'W')

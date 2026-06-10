@@ -119,6 +119,65 @@ class RcCodec:
 		payload = tmp[-1]
 		return (topic, payload)
 
+	def _normalize_params(self, params):
+		if type(params) is dict:
+			return dict(params)
+		if not hasattr(self, "_params"):
+			return None
+		temp = {}
+		for i, value in enumerate(params[:len(self._params)]):
+			temp[self._params[i][1]] = value
+		return temp
+
+	def getMqttParamsFromMessage(self, topic_params, payload):
+		return list(topic_params) + [payload]
+
+	def getDiscoveryFields(self, params):
+		return []
+
+	def _getDiscoveryComponent(self, params):
+		return "switch"
+
+	def getDiscoveryConfig(self, params, base_topic, discovery_prefix="homeassistant", device_id="raspyrfm_rcpulse", device_name="RaspyRFM RC Pulse Gateway", clear=False):
+		params = self._normalize_params(params)
+		if params is None:
+			raise Exception("Discovery is not supported for this protocol")
+		fields = []
+		for value in self.getDiscoveryFields(params):
+			if value is None:
+				continue
+			text = str(value).strip().upper()
+			if text:
+				fields.append(text)
+		if len(fields) == 0:
+			raise Exception("Discovery is not supported for this protocol")
+		state_topic = base_topic + "/" + self._name
+		for field in fields:
+			state_topic += "/" + field
+		object_id = re.sub(r"[^a-z0-9_]+", "_", (self._name + "_" + "_".join(fields)).lower()).strip("_")
+		component = self._getDiscoveryComponent(params)
+		config_topic = discovery_prefix + "/" + component + "/" + device_id + "/" + object_id + "/config"
+		if clear:
+			return config_topic, ""
+		payload = {
+			"name": self._name + " " + " ".join(fields),
+			"uniq_id": device_id + "_" + object_id,
+			"cmd_t": state_topic + "/set",
+			"dev": {
+				"ids": [device_id],
+				"name": device_name,
+				"mf": "RaspyRFM"
+			}
+		}
+		if component == "button":
+			payload["pl_prs"] = "PRESS"
+		else:
+			payload["stat_t"] = state_topic
+			payload["pl_on"] = "on"
+			payload["pl_off"] = "off"
+		return config_topic, payload
+
+
 	def decode(self, pulseBuf):
 		temp = self._decodeSymbols(pulseBuf)
 		if temp is not None:
@@ -245,7 +304,7 @@ class ITTristate(Tristate):
 	def __init__(self):
 		Tristate.__init__(self)
 		self._name = "ittristate"
-		self._pattern = "[0F]{8}0F(FF|F0)"
+		self._pattern = "[0F]{8}0FX(FF|F0)"
 		self._params = [PARAM_HOUSE, PARAM_GROUP, PARAM_UNIT, PARAM_COMMAND]
 		self._commands = {"on": "FF", "off": "F0"}
 
@@ -265,11 +324,27 @@ class ITTristate(Tristate):
 		symbols = ""
 		house = params["house"].upper()[0]
 		symbols += self._encodeInt(ord(house) - ord('A'), 4)
-		symbols += self._encodeInt(int(params["unit"]) - 1, 2)
-		symbols += self._encodeInt(int(params["group"]) - 1, 2)
+		unit = int(params["unit"])
+		if unit > 0:
+			symbols += self._encodeInt(unit - 1, 2)
+		else:
+			symbols += "XX"
+		group = int(params["group"])
+		if group > 0:
+			symbols += self._encodeInt(group - 1, 2)
+		else:
+			symbols += "XX"
 		symbols += "0F"
 		symbols += self._encodeCommand(params["command"])
 		return symbols
+
+	def getDiscoveryFields(self, params):
+		fields = [params["house"]]
+		if int(params.get("group", 0)) > 0:
+			fields.append(params["group"])
+		if int(params.get("unit", 0)) > 0:
+			fields.append(params["unit"])
+		return fields
 
 
 class BrennenstuhlRCS1000(Tristate):
@@ -372,8 +447,10 @@ class Intertechno(PPM32):
 			if dim > 15:
 				dim = 15
 			symbols += "{:04b}".format(dim)
-		print("it symbols", symbols)
 		return symbols
+
+	def getDiscoveryFields(self, params):
+		return [params["id"], params["unit"]]
 
 
 class Hama(Intertechno):
@@ -412,6 +489,15 @@ class PWM24(RcCodec):
 		self._class = CLASS_RCSWITCH
 		self._params = [PARAM_ID, PARAM_DATA]
 		self._name = "EV1527"
+
+	def getDiscoveryFields(self, params):
+		return [params["id"], params["data"]]
+
+	def _getDiscoveryComponent(self, params):
+		return "button"
+
+	def getMqttParamsFromMessage(self, topic_params, payload):
+		return list(topic_params)
 
 	def _decodeBinLSB(self, symbols):
 		temp = symbols[::-1] # reverse string
@@ -477,10 +563,14 @@ class Emylo(PWM24):
 		}
 
 	def _encode(self, params):
+		print(params)
 		symbols = ""
 		symbols += "{:020b}".format(int(params["id"]))
-		symbols += self._encode_command(params["command"])
+		symbols += self._encodeCommand(params["command"])
 		return symbols
+
+	def getDiscoveryFields(self, params):
+		return [params["id"], str(params["command"]).upper()]
 
 
 class PilotaCasa(RcCodec):
@@ -549,6 +639,9 @@ class PilotaCasa(RcCodec):
 		symbols += "{:016b}".format(int(params["id"]))
 		symbols += "11111111"
 		return symbols
+
+	def getDiscoveryFields(self, params):
+		return [params["id"], params["group"], params["unit"]]
 
 
 class Unknown(RcCodec):
@@ -1021,6 +1114,12 @@ def get_protocol(name):
 			return p
 	return None
 
+def get_discovery_config(name, params, base_topic, discovery_prefix="homeassistant", device_id="raspyrfm_rcpulse", device_name="RaspyRFM RC Pulse Gateway", clear=False):
+	proto = get_protocol(name)
+	if proto is None:
+		raise Exception("Unsupported protocol")
+	return proto.getDiscoveryConfig(params, base_topic, discovery_prefix, device_id, device_name, clear)
+
 class RfmPulseTRX(threading.Thread):
 	def __init__(self, module, rxcb, frequency):
 		self.__rfm = RaspyRFM(module, RFM69)
@@ -1162,6 +1261,13 @@ class RcTransceiver(threading.Thread):
 			except Exception as e:
 				raise(e)
 				print("Encode error: " + str(e))
+
+	def sendRaw(self, timings, repeats):
+		for i, t in enumerate(timings):
+			timings[i] = abs(t)
+		rcraw = RcRaw(50)
+		ook = rcraw.build_raw(timings, repeats)
+		self.__rfmtrx.send(ook, 50)
 
 	def run(self):
 		while True:

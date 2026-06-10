@@ -346,6 +346,7 @@ while 1:
         jfile.close()
         for c in cache.values():
             c["discSent"] = False
+            c["discTopics"] = set()
 
     event.wait()
     rfmlock.acquire()
@@ -376,7 +377,7 @@ while 1:
     lock.acquire()
 
     if not id in cache:
-        cache[id] = {"discSent": False}
+        cache[id] = {"discSent": False, "discTopics": set()}
     cache[id]["payload"] = payload
     cache[id]["ts"] = datetime.now()
 
@@ -391,48 +392,33 @@ while 1:
     }
     apisrv.send(apipayl)
 
-    if not cache[id]["discSent"] and "room" in payload and mqttClient: # discovery not sent yet & configured
-        print("send discovery!")
-        cache[id]["discSent"] = True
+    if mqttClient:
+        discoveryPaths = sensor.getDiscoveryPaths(
+            getTopic(sensor),
+            payload["room"] if "room" in payload else None,
+            nodePrefix = "raspyrfm",
+            deviceIdentifier = "raspyrfm_gateway_868",
+            deviceName = "RFM Gateway 868"
+        )
+        if "discTopics" not in cache[id] or not isinstance(cache[id]["discTopics"], set):
+            cache[id]["discTopics"] = set()
 
-        basemsg = {
-            "stat_cla": "measurement",
-            "state_topic": getTopic(sensor),
-            "exp_aft": 300,
-            "device": {
-                "identifiers": [
-                    type(sensor).__name__ + id
-                ],
-                "name": type(sensor).__name__ + " " + id,
-                "manufacturer": "Seegel Systeme",
-                "suggested_area": payload["room"]
-            }
-        }
+        sentTopics = cache[id]["discTopics"]
+        published = 0
+        for path in discoveryPaths:
+            topic = path.get("topic")
+            payloadData = path.get("payload")
+            if not topic or payloadData is None:
+                continue
+            if topic in sentTopics:
+                continue
+            mqttClient.publish(topic, json.dumps(payloadData), 2, True)
+            sentTopics.add(topic)
+            published += 1
 
-        roomid = re.sub('\W|^(?=\d)','_', payload["room"])
-        roomid = re.sub('[^0-9a-zA-Z_]', '_', payload["room"])
-        roomid = re.sub('^[^a-zA-Z_]+', '', roomid)
-
-        topic = "homeassistant/sensor/raspyrfm_" + roomid + "_T/config"
-        msg = basemsg | {
-                "name": "T " + payload["room"],
-                "device_class": "temperature",
-                "unique_id": "raspyrfm_" + roomid + "_T",
-                "unit_of_meas": "°C",
-                "val_tpl": "{{ value_json['T'] }}"
-        }
-        mqttClient.publish(topic, json.dumps(msg), 2, True)
-
-        if "RH" in payload:
-            topic = "homeassistant/sensor/raspyrfm_" + roomid + "_RH/config"
-            msg = basemsg | {
-                    "name": "RH " + payload["room"],
-                    "device_class": "humidity",
-                    "unique_id": "raspyrfm_" + roomid + "_RH",
-                    "unit_of_meas": "%",
-                    "val_tpl": "{{ value_json['RH'] }}"
-            }
-            mqttClient.publish(topic, json.dumps(msg), 2, True)
+        if published > 0:
+            print("send discovery!")
+            cache[id]["discSent"] = True
 
     lock.release()
 
