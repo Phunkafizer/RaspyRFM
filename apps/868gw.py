@@ -49,22 +49,23 @@ if rfm == None:
 	print("No RFM69 module found!")
 	exit()
 
+influxClient = None
 try:
-    from influxdb import InfluxDBClient
-    host = config["influxdb"]["host"]
-    if host == "":
-        raise Exception("No host given")
-    influxClient = InfluxDBClient(
-        host=host,
-        port=config["influxdb"]["port"],
-        username=config["influxdb"]["user"],
-        password=config["influxdb"]["pass"]
-    )
-    influxClient.switch_database(config["influxdb"]["database"])
-    print("InfluxDB1 client loaded")
+    if "influxdb" in config:
+        from influxdb import InfluxDBClient
+        host = config["influxdb"]["host"]
+        if host == "":
+            raise Exception("No host given")
+        influxClient = InfluxDBClient(
+            host=host,
+            port=config["influxdb"]["port"],
+            username=config["influxdb"]["user"],
+            password=config["influxdb"]["pass"]
+        )
+        influxClient.switch_database(config["influxdb"]["database"])
+        print("InfluxDB1 client loaded")
 
 except Exception as ex:
-    influxClient = None
     print("InfluxDB1 Exception:", ex)
 
 influxClient2 = None
@@ -422,10 +423,6 @@ while 1:
 
     lock.release()
 
-    measurement = config["influxdb"]["measurement"] if "measurement" in config["influxdb"] else ""
-    if measurement == "":
-        measurement = sensor.getClass()
-
     vals = sensor.getDbValues()
 
     if sql:
@@ -443,6 +440,10 @@ while 1:
 
     if influxClient:
         try:
+            measurement = config["influxdb"]["measurement"] if "measurement" in config["influxdb"] else ""
+            if measurement == "":
+                measurement = sensor.getClass()
+
             wr = {
                 "measurement": measurement,
                 "fields": {},
