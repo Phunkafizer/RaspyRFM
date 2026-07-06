@@ -12,7 +12,7 @@ PULSEWIDTHUS = 1/RXDATARATE*1000
 PARAM_ID = ('i', 'id')
 PARAM_HOUSE = ('o', 'house')
 PARAM_GROUP = ('g', 'group')
-PARAM_UNIT = ('u', 'unit')
+PARAM_CHANNEL = ('n', 'channel')
 PARAM_COMMAND = ('a', 'command')
 PARAM_CODE = ('c', 'code')
 PARAM_DIPS = ('d', 'dips')
@@ -305,18 +305,18 @@ class ITTristate(Tristate):
 		Tristate.__init__(self)
 		self._name = "ittristate"
 		self._pattern = "[0F]{8}0FX(FF|F0)"
-		self._params = [PARAM_HOUSE, PARAM_GROUP, PARAM_UNIT, PARAM_COMMAND]
+		self._params = [PARAM_HOUSE, PARAM_GROUP, PARAM_CHANNEL, PARAM_COMMAND]
 		self._commands = {"on": "FF", "off": "F0"}
 
 	def _decode(self, symbols):
 		house = chr(self._decodeInt(symbols[:4]) + ord('A'))
-		unit = self._decodeInt(symbols[4:6]) + 1
+		channel = self._decodeInt(symbols[4:6]) + 1
 		group = self._decodeInt(symbols[6:8]) + 1
 		command = self._decodeCommand(symbols[10:12])
 		return {
 			"house": house,
 			"group": group,
-			"unit": unit,
+			"channel": channel,
 			"command": command
 		}
 
@@ -324,9 +324,9 @@ class ITTristate(Tristate):
 		symbols = ""
 		house = params["house"].upper()[0]
 		symbols += self._encodeInt(ord(house) - ord('A'), 4)
-		unit = int(params["unit"])
-		if unit > 0:
-			symbols += self._encodeInt(unit - 1, 2)
+		channel = int(params["channel"])
+		if channel > 0:
+			symbols += self._encodeInt(channel - 1, 2)
 		else:
 			symbols += "XX"
 		group = int(params["group"])
@@ -342,8 +342,8 @@ class ITTristate(Tristate):
 		fields = [params["house"]]
 		if int(params.get("group", 0)) > 0:
 			fields.append(params["group"])
-		if int(params.get("unit", 0)) > 0:
-			fields.append(params["unit"])
+		if int(params.get("channel", 0)) > 0:
+			fields.append(params["channel"])
 		return fields
 
 
@@ -352,22 +352,22 @@ class BrennenstuhlRCS1000(Tristate):
 		Tristate.__init__(self)
 		self._name = "rcs1000"
 		self._pattern = "[0F]{5}(0FFF|F0FF|FF0F|FFF0)F(0F|F0)"
-		self._params = [PARAM_DIPS, PARAM_UNIT, PARAM_COMMAND]
+		self._params = [PARAM_DIPS, PARAM_CHANNEL, PARAM_COMMAND]
 		self._commands = {"on": "0F", "off": "F0"}
 
 	def _decode(self, symbols):
 		dips = ""
 		for s in symbols[0:5]:
 			dips += "1" if s == '0' else "0"
-		unit = 0
+		channel = 0
 		for u in symbols[5:9]:
-			unit += 1
+			channel += 1
 			if u == '0':
 				break
 
 		return {
 			"dips": dips,
-			"unit": unit,
+			"channel": channel,
 			"command": self._decodeCommand(symbols[10:12].upper())
 		}
 
@@ -376,7 +376,7 @@ class BrennenstuhlRCS1000(Tristate):
 		for c in params["dips"]:
 			symbols += '0' if c == '1' else 'F'
 		for i in range(4):
-			symbols += '0' if (int(params["unit"]) - 1) == i else 'F'
+			symbols += '0' if (int(params["channel"]) - 1) == i else 'F'
 		symbols += "F"
 		symbols += self._encodeCommand(params["command"])
 		return symbols
@@ -390,7 +390,7 @@ class PPM32(RcCodec):
 		self._repetitions = 10
 		self._autoTimebase = (24, 225, 350) # symbols, min, max
 		self._rxq = 3 # rx quality factor q, matching windows s-(s/q) <= x <= s+(s/q)
-		self._header = [1, 60]
+		self._header = [1, 11]
 		self._footer = [1, 39]
 		self._symbols = {
 			'0': [1, 1, 1, 5],
@@ -404,17 +404,18 @@ class Intertechno(PPM32):
 	def __init__(self):
 		PPM32.__init__(self)
 		self._name = "intertechno"
-		self._params = [PARAM_ID, PARAM_UNIT, PARAM_COMMAND]
+		self._params = [PARAM_ID, PARAM_CHANNEL, PARAM_COMMAND]
 		self._symbols['X'] = [1, 1, 1, 1]
 		self._pattern = "([01]{32})|([01]{27}X[01]{8})"
-		self._commands = {"on": "1", "off": "0"}
+		self._commands = {"ON": "1", "OFF": "0"}
 
-	def _decodeUnit(self, symbols):
+	def _decodeChannel(self, symbols):
 		return int(symbols, 2) + 1
 
 	def _decode(self, symbols):
+		print("Received symbols:", symbols)
 		id = int(symbols[:26], 2)
-		unit = self._decodeUnit(symbols[28:32])
+		channel = self._decodeChannel(symbols[28:32])
 		if symbols[27] == 'X': #dimmer command
 			command = int(round(int(symbols[32:36], 2) * 100 / 15.0))
 		else:
@@ -422,12 +423,12 @@ class Intertechno(PPM32):
 
 		return {
 			"id": id,
-			"unit": unit,
+			"channel": channel,
 			"command": command
 		}
 
-	def _encodeUnit(self, unit):
-		return "{:04b}".format(int(unit) - 1)
+	def _encodeChannel(self, channel):
+		return "{:04b}".format(int(channel) - 1)
 
 	def _encode(self, params):
 		symbols = ""
@@ -440,17 +441,19 @@ class Intertechno(PPM32):
 		except:
 			symbols += self._encodeCommand(params["command"])
 
-		symbols += self._encodeUnit(params["unit"])
+		symbols += self._encodeChannel(params["channel"])
 
 		if dim:
 			dim = int(round(15*dim/100.0))
 			if dim > 15:
 				dim = 15
 			symbols += "{:04b}".format(dim)
+
+		print("encoded symbols:", symbols)
 		return symbols
 
 	def getDiscoveryFields(self, params):
-		return [params["id"], params["unit"]]
+		return [params["id"], params["channel"]]
 
 
 class Hama(Intertechno):
@@ -460,11 +463,11 @@ class Hama(Intertechno):
 		self._timebase = 250
 		self._timebaserange = (200, 300)
 
-	def _decodeUnit(self, symbols):
+	def _decodeChannel(self, symbols):
 		return 16 - int(symbols, 2)
 
-	def _encodeUnit(self, unit):
-		return "{:04b}".format(16 - int(unit))
+	def _encodeChannel(self, channel):
+		return "{:04b}".format(16 - int(channel))
 
 
 class PWM24(RcCodec):
@@ -525,16 +528,16 @@ class Logilight(PWM24):
 		self._name = "logilight"
 		self._timebase = 300
 		self._autoTimebase = (24, 250, 350) # symbols, min, max
-		self._params = [PARAM_ID, PARAM_UNIT, PARAM_COMMAND]
+		self._params = [PARAM_ID, PARAM_CHANNEL, PARAM_COMMAND]
 		self._commands = {"on": "1", "learn": "1", "off": "0"}
 
 	def _decode(self, symbols):
 		id = int(symbols[:20], 2)
-		unit = (self._decodeBinLSB(symbols[21:24]) ^ 0x07) + 1
+		channel = (self._decodeBinLSB(symbols[21:24]) ^ 0x07) + 1
 		command = self._decodeCommand(symbols[20])
 		return {
 			"id": id,
-			"unit": unit,
+			"channel": channel,
 			"command": command
 		}
 
@@ -542,7 +545,7 @@ class Logilight(PWM24):
 		symbols = ""
 		symbols += "{:020b}".format(int(params["id"]))
 		symbols += self._encodeCommand(params["command"])
-		symbols += self._encodeBinLsb((int(params["unit"]) - 1) ^ 0x07, 3)
+		symbols += self._encodeBinLsb((int(params["channel"]) - 1) ^ 0x07, 3)
 		if (params["command"].lower() == "learn"):
 			return symbols, 10
 		return symbols
@@ -607,7 +610,7 @@ class PilotaCasa(RcCodec):
 			'0': [2, 1],
 		}
 		self._footer = [1, 12]
-		self._params = [PARAM_ID, PARAM_GROUP, PARAM_UNIT, PARAM_COMMAND]
+		self._params = [PARAM_ID, PARAM_GROUP, PARAM_CHANNEL, PARAM_COMMAND]
 		self._class = CLASS_RCSWITCH
 
 	def _decode(self, symbols):
@@ -617,7 +620,7 @@ class PilotaCasa(RcCodec):
 			return {
 				"id": id,
 				"group": c[0],
-				"unit": c[1],
+				"channel": c[1],
 				"command": c[2]
 			}
 
@@ -629,10 +632,10 @@ class PilotaCasa(RcCodec):
 			repetitions = 20
 			cmd = "on"
 		elif cmd in ["allon", "alloff"]:
-			params["unit"] = -1
+			params["channel"] = -1
 			params["group"] = -1
 		for k, v in self.__codes.items():
-			if v[0] == int(params["group"]) and v[1] == int(params["unit"]) and v[2] == cmd:
+			if v[0] == int(params["group"]) and v[1] == int(params["channel"]) and v[2] == cmd:
 				u = k
 				break
 		symbols += u
@@ -641,7 +644,7 @@ class PilotaCasa(RcCodec):
 		return symbols
 
 	def getDiscoveryFields(self, params):
-		return [params["id"], params["group"], params["unit"]]
+		return [params["id"], params["group"], params["channel"]]
 
 
 class Unknown(RcCodec):
@@ -770,66 +773,6 @@ class Voltcraft(RcPulse):
 			command = self._decode_command(symbols[14:17])
 			return [id, unit, command], tb, rep
 
-class PilotaCasa(RcPulse):
-	Pulse Width Modulation 32 bit
-	Wide pulse -> 0, small pulse -> 1
-	__codes = {
-		'110001': (1, 1, 'on'), '111110': (1, 1, 'off'),
-		'011001': (1, 2, 'on'), '010001': (1, 2, 'off'),
-		'101001': (1, 3, 'on'), '100001': (1, 3, 'off'),
-		'111010': (2, 1, 'on'), '110010': (2, 1, 'off'),
-		'010110': (2, 2, 'on'), '011010': (2, 2, 'off'),
-		'100110': (2, 3, 'on'), '101010': (2, 3, 'off'),
-		'110111': (3, 1, 'on'), '111011': (3, 1, 'off'),
-		'011111': (3, 2, 'on'), '010111': (3, 2, 'off'),
-		'101111': (3, 3, 'on'), '100111': (3, 3, 'off'),
-		'111101': (4, 1, 'on'), '110101': (4, 1, 'off'),
-		'010011': (4, 2, 'on'), '011101': (4, 2, 'off'),
-		'100011': (4, 3, 'on'), '101101': (4, 3, 'off'),
-		'101100': (-1, -1 , 'allon'), '011100': (-1, -1, 'alloff')
-	}
-
-	def __init__(self):
-		self._name = "pilota"
-		self._timebase = 550
-		self._repetitions = 10
-		self._pattern = "[01]{32}"
-		self._symbols = {
-			'1': [1, 2],
-			'0': [2, 1],
-		}
-		self._footer = [1, 12]
-		self._params = [PARAM_ID, PARAM_GROUP, PARAM_UNIT, PARAM_COMMAND]
-		self._class = CLASS_RCSWITCH
-		RcPulse.__init__(self)
-
-	def encode(self, params, timebase=None, repetitions=None):
-		symbols = '01'
-		u = None
-		cmd = params["command"].lower()
-		if cmd == "learn":
-			repetitions = 20
-			cmd = "on"
-		elif cmd in ["allon", "alloff"]:
-			params["unit"] = -1
-			params["group"] = -1
-		for k, v in self.__codes.items():
-			if v[0] == int(params["group"]) and v[1] == int(params["unit"]) and v[2] == cmd:
-				u = k
-				break
-		symbols += u
-		symbols += "{:016b}".format(int(params["id"]))[::-1]
-		symbols += "11111111"
-		return self._build_frame(symbols, timebase, repetitions)
-
-	def decode(self, pulsetrain):
-		symbols, tb, rep = self._decode_symbols(pulsetrain[:-2])
-		if symbols and (symbols[2:8] in self.__codes):
-			c = self.__codes[symbols[2:8]]
-			id = int(symbols[8:24][::-1], 2)
-			return [id, c[0], c[1], c[2]], tb, rep
-
-			
 class PCPIR(TristateBase): #pilota casa PIR sensor
 	# Pilota Casa IR sensor
 
@@ -1253,7 +1196,11 @@ class RcTransceiver(threading.Thread):
 		proto = get_protocol(protocol)
 		if proto:
 			try:
+				print("I have proto", proto)
+				print("params:", params)
 				txdata, tb = proto.encode(params, timebase, repeats)
+				print("txdata:", txdata)
+				print("timebase:", tb)
 				self.__rfmtrx.send(txdata, tb)
 				if self.__statecb:
 					topic, msg = proto.getMqttFromParams(params)
