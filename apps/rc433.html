@@ -226,7 +226,7 @@
                 case 'pilota':
                     return { protocol, id: requireInt('pilota-id', 'ID'), group: Number(document.getElementById('pilota-group').value), channel: Number(document.getElementById('pilota-channel').value), command };
                 case 'emylo':
-                    return { protocol, id: requireInt('emylo-id', 'ID'), key: command || document.getElementById('emylo-discovery-key').value };
+                    return { protocol, id: requireInt('emylo-id', 'ID'), command: command || document.getElementById('emylo-discovery-key').value };
                 case 'EV1527':
                     return { protocol, id: requireInt('ev1527-id', 'ID'), data: requireInt('ev1527-data', 'Data') };
                 default:

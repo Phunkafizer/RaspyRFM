@@ -531,6 +531,11 @@ class Logilight(PWM24):
 		self._params = [PARAM_ID, PARAM_CHANNEL, PARAM_COMMAND]
 		self._commands = {"on": "1", "learn": "1", "off": "0"}
 
+	def getMqttParamsFromMessage(self, topic_params, payload):
+		# Command comes in the MQTT payload (topic .../logilight/<id>/<channel>/set),
+		# unlike EV1527 (PWM24 base) where all params are topic segments.
+		return list(topic_params) + [payload]
+
 	def _decode(self, symbols):
 		id = int(symbols[:20], 2)
 		channel = (self._decodeBinLSB(symbols[21:24]) ^ 0x07) + 1
@@ -556,6 +561,11 @@ class Emylo(PWM24):
 		self._name = "emylo"
 		self._params = [PARAM_ID, PARAM_COMMAND]
 		self._commands = {'A': '0001', 'B': '0010', 'C': '0100', 'D': '1000'}
+
+	def getMqttParamsFromMessage(self, topic_params, payload):
+		# Unlike EV1527 (PWM24 base), the command comes in the MQTT payload
+		# (e.g. topic .../emylo/<id>/set, payload "A"), not in the topic.
+		return list(topic_params) + [payload]
 
 	def _decode(self, symbols):
 		id = int(symbols[:20], 2)
@@ -1081,6 +1091,7 @@ class RfmPulseTRX(threading.Thread):
 		self.__rxevent = threading.Event()
 		self.__rxevent.set()
 		self.__rfmlock = threading.Lock()
+		self.__txlock = threading.Lock()
 
 		if rxcb is not None:
 			self.__rxtraincb = rxcb
@@ -1092,12 +1103,16 @@ class RfmPulseTRX(threading.Thread):
 		while True:
 			self.__rxevent.wait()
 			self.__rfmlock.acquire()
-			self.__rfm.set_params(Datarate = RXDATARATE)
-			self.__rfm.receive_start(0) # unlimited length
-			self.__receive()
-			self.__rfm.receive_end()
-			self.__rfmlock.release()
-			continue
+			try:
+				self.__rfm.set_params(Datarate = RXDATARATE)
+				self.__rfm.receive_start(0) # unlimited length
+				self.__receive()
+				self.__rfm.receive_end()
+			except Exception as ex:
+				print("RX thread error:", repr(ex))
+				time.sleep(1)
+			finally:
+				self.__rfmlock.release()
 
 	def __receive(self):
 		bit = False
@@ -1132,15 +1147,23 @@ class RfmPulseTRX(threading.Thread):
 					mask >>= 1
 
 	def send(self, train, timebase):
-		self.__rxevent.clear()
-		self.__rfm.receive_stop()
-		self.__rfmlock.acquire()
-		self.__rfm.set_params(
-			Datarate = 1000.0 / timebase
-		)
-		self.__rfm.send(train)
-		self.__rfmlock.release()
-		self.__rxevent.set()
+		# serialize senders (MQTT / HTTP / apiserver threads may call concurrently)
+		with self.__txlock:
+			self.__rxevent.clear()
+			# receive_stop() no-ops if the rx thread is between rxevent.wait()
+			# and receive_start(); retry until the rfm lock is actually free
+			while True:
+				self.__rfm.receive_stop()
+				if self.__rfmlock.acquire(timeout = 1.0):
+					break
+			try:
+				self.__rfm.set_params(
+					Datarate = 1000.0 / timebase
+				)
+				self.__rfm.send(train)
+			finally:
+				self.__rfmlock.release()
+				self.__rxevent.set()
 
 class RcTransceiver(threading.Thread):
 	def __init__(self, module, frequency, rxcallback, statecallback = None):
@@ -1196,11 +1219,7 @@ class RcTransceiver(threading.Thread):
 		proto = get_protocol(protocol)
 		if proto:
 			try:
-				print("I have proto", proto)
-				print("params:", params)
 				txdata, tb = proto.encode(params, timebase, repeats)
-				print("txdata:", txdata)
-				print("timebase:", tb)
 				self.__rfmtrx.send(txdata, tb)
 				if self.__statecb:
 					topic, msg = proto.getMqttFromParams(params)

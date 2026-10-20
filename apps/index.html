@@ -472,6 +472,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
+                    <button id="btnAddHA" type="button" class="btn btn-primary">Add to Home Assistant</button>
                     <button id="btnDelSensorCfg" type="button" class="material-icons btn btn-danger">delete</button>
                     <button id="btnSaveSensorCfg" type="button" class="material-icons btn btn-primary">save</button>
                 </div>
@@ -1072,6 +1073,25 @@
                     return false;
                 }
             });
+        });
+
+        $('#btnAddHA').click(function () {
+            $.ajax({
+                url: 'hadiscovery',
+                type: 'post',
+                data: JSON.stringify({ id: $("#sensorCfgId").val() }),
+                contentType: "application/json"
+            })
+                .done(function (resp) {
+                    alert('Sensor zu Home Assistant hinzugefügt (' + resp.published + ' Entitäten)');
+                })
+                .fail(function (xhr) {
+                    var msg = 'Fehler beim Senden der Discovery-Nachricht';
+                    try {
+                        msg += ': ' + JSON.parse(xhr.responseText).error;
+                    } catch (e) { }
+                    alert(msg);
+                });
         });
 
         $('#btnSaveSensorCfg').click(function () {
