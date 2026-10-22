@@ -20,6 +20,7 @@ dblock = threading.Lock()
 event = threading.Event()
 event.set()
 rfmlock = threading.Lock()
+start_time = time.time()
 reloadConf = True
 config = {}
 cache = {}
@@ -397,8 +398,8 @@ while 1:
             getTopic(sensor),
             payload["room"] if "room" in payload else None,
             nodePrefix = "raspyrfm",
-            deviceIdentifier = "raspyrfm_gateway_868",
-            deviceName = "RFM Gateway 868"
+            deviceIdentifier = "raspyrfm_868gw",
+            deviceName = "RaspyRFM 868gw"
         )
         if "discTopics" not in cache[id] or not isinstance(cache[id]["discTopics"], set):
             cache[id]["discTopics"] = set()
@@ -411,6 +412,8 @@ while 1:
             if not topic or payloadData is None:
                 continue
             if topic in sentTopics:
+                continue
+            if (time.time() - start_time) >= 300:
                 continue
             mqttClient.publish(topic, json.dumps(payloadData), 2, True)
             sentTopics.add(topic)
