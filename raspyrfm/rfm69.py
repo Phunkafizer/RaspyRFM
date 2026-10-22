@@ -1,3 +1,8 @@
+# Vendored from https://github.com/Phunkafizer/RaspyRFM (raspyrfm/rfm69.py)
+# with deadlock fixes: __wait_int re-checks the DIO pin level (missed GPIO
+# edges no longer hang forever), bounded waits in send/__set_mode/receive_stop.
+# This local package shadows the pip-installed raspyrfm when the apps run
+# from this directory.
 from __future__ import print_function
 from . import rfmbase
 import spidev, sys, threading, time
@@ -243,8 +248,11 @@ class Rfm69(rfmbase.RfmBase):
 		self._write_reg(RegOpMode, mode << 2)
 		self.__set_highPowerRegs(mode)
 		self.__mode = mode
+		end = time.time() + 1.0
 		while ((self.read_reg(RegIrqFlags1) & (1<<7)) == 0):
-			pass
+			if time.time() >= end:
+				print("WARNING! Timeout waiting for ModeReady", file=sys.stderr)
+				break
 
 	def read_rssi_value(self):
 		return self.read_reg(RegRssiValue)
@@ -385,12 +393,17 @@ class Rfm69(rfmbase.RfmBase):
 		else:
 			raise Exception("Invalid powerlevel!")
 
-	def __wait_int(self):
-		if GPIO.input(self.__gpio_int):
-			return True
-		while not self.__irqEvent.wait(0.5):
-			pass
-		return GPIO.input(self.__gpio_int)
+	def __wait_int(self, timeout = None):
+		# Re-check the pin level on every iteration: RPi.GPIO edge callbacks
+		# can be dropped under load and the event alone would then never fire.
+		end = (time.time() + timeout) if timeout is not None else None
+		while True:
+			if GPIO.input(self.__gpio_int):
+				return True
+			if self.__irqEvent.wait(0.5):
+				return GPIO.input(self.__gpio_int)
+			if (end is not None) and (time.time() >= end):
+				return GPIO.input(self.__gpio_int)
 
 	def whiten_hope(self, data):
 		lfsr = 0x3fe
@@ -435,11 +448,13 @@ class Rfm69(rfmbase.RfmBase):
 		if not self.__aes_on:
 			self.__set_mode(MODE_TX)
 
+		deadline = time.time() + 10
 		while True:
 			self.write_fifo_burst(data[:l])
 			data = data[l:]
 			if len(data) == 0:
 				break
+			aborted = False
 			while True:
 				status = self.read_reg(RegIrqFlags2)
 				if (status & (1<<5)) == 0: # below fifothresh
@@ -448,10 +463,23 @@ class Rfm69(rfmbase.RfmBase):
 				if (status & (1<<7)) == 0: # space for at least 1 bytearray
 					l = 1
 					break
+				if time.time() >= deadline:
+					print("WARNING! TX stalled while filling FIFO, aborting transmission", file=sys.stderr)
+					aborted = True
+					break
+			if aborted:
+				break
 		if self.__aes_on:
 			self.__set_mode(MODE_TX)
 
-		self.__wait_int()
+		# Clear any stale edge captured during the standby/FIFO/TX-mode
+		# transitions so we wait for the real PacketSent edge instead of
+		# returning immediately on a leftover event (false "Timeout" while
+		# the packet is still being transmitted). __wait_int still falls
+		# back to polling the DIO pin level if a genuine edge is dropped.
+		self.__irqEvent.clear()
+		if not self.__wait_int(5):
+			print("WARNING! Timeout waiting for PacketSent", file=sys.stderr)
 		self.mode_standby()
 
 	def read_fifo_wait(self, length):
@@ -539,8 +567,11 @@ class Rfm69(rfmbase.RfmBase):
 		self.__rxMode = False
 		self.__irqEvent.set()
 		self.__mutex.release()
-		#wait until receiveroutine is ready
-		self.__rxEvent.wait()
+		#wait (bounded) until receiveroutine is ready; callers may retry
+		if not self.__rxEvent.wait(2.0):
+			print("WARNING! receive_stop: receiver did not stop within 2 s", file=sys.stderr)
+			return False
+		return True
 
 	def receive_end(self):
 		self.__mutex.acquire()

@@ -20,7 +20,6 @@ dblock = threading.Lock()
 event = threading.Event()
 event.set()
 rfmlock = threading.Lock()
-start_time = time.time()
 reloadConf = True
 config = {}
 cache = {}
@@ -50,22 +49,23 @@ if rfm == None:
 	print("No RFM69 module found!")
 	exit()
 
+influxClient = None
 try:
-    from influxdb import InfluxDBClient
-    host = config["influxdb"]["host"]
-    if host == "":
-        raise Exception("No host given")
-    influxClient = InfluxDBClient(
-        host=host,
-        port=config["influxdb"]["port"],
-        username=config["influxdb"]["user"],
-        password=config["influxdb"]["pass"]
-    )
-    influxClient.switch_database(config["influxdb"]["database"])
-    print("InfluxDB1 client loaded")
+    if "influxdb" in config:
+        from influxdb import InfluxDBClient
+        host = config["influxdb"]["host"]
+        if host == "":
+            raise Exception("No host given")
+        influxClient = InfluxDBClient(
+            host=host,
+            port=config["influxdb"]["port"],
+            username=config["influxdb"]["user"],
+            password=config["influxdb"]["pass"]
+        )
+        influxClient.switch_database(config["influxdb"]["database"])
+        print("InfluxDB1 client loaded")
 
 except Exception as ex:
-    influxClient = None
     print("InfluxDB1 Exception:", ex)
 
 influxClient2 = None
@@ -105,7 +105,7 @@ try:
         )
     """)
     sql.commit()
-    threading.Thread(target=sql_purge).start()
+    threading.Thread(target=sql_purge, daemon=True).start()
 
 except:
     pass
@@ -313,6 +313,57 @@ class MyHttpRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(b'')
 
+        elif path == '/hadiscovery':
+            content_len = int(self.headers.get('content-length', 0))
+            body = json.loads(self.rfile.read(content_len)) if content_len else {}
+            id = body.get("id")
+
+            status = 200
+            result = {"published": 0}
+
+            if not id:
+                status = 400
+                result["error"] = "missing sensor id"
+            elif mqttClient is None:
+                status = 503
+                result["error"] = "MQTT client not available"
+            else:
+                lock.acquire()
+                try:
+                    sensor = cache[id]["sensor"] if id in cache and "sensor" in cache[id] else None
+                    if sensor is None:
+                        status = 404
+                        result["error"] = "sensor not received yet"
+                    else:
+                        room = None
+                        for csens in config["sensors"]:
+                            if csens["id"] == id:
+                                room = csens["name"]
+                                break
+
+                        discoveryPaths = sensor.getDiscoveryPaths(
+                            getTopic(sensor),
+                            room,
+                            nodePrefix = "raspyrfm",
+                            deviceIdentifier = "raspyrfm_gateway_868",
+                            deviceName = "RFM Gateway 868"
+                        )
+                        for disc in discoveryPaths:
+                            topic = disc.get("topic")
+                            payloadData = disc.get("payload")
+                            if not topic or payloadData is None:
+                                continue
+                            mqttClient.publish(topic, json.dumps(payloadData), 2, True)
+                            result["published"] += 1
+                        print("send discovery for", id)
+                finally:
+                    lock.release()
+
+            self.send_response(status)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode())
+
 
 class Server(socketserver.ThreadingMixIn, socketserver.TCPServer):
     def __init__(self, server_address, RequestHandlerClass):
@@ -345,14 +396,16 @@ while 1:
         with open(script_dir + "/868gw.conf") as jfile:
             config = json.load(jfile)
         jfile.close()
-        for c in cache.values():
-            c["discSent"] = False
-            c["discTopics"] = set()
 
     event.wait()
     rfmlock.acquire()
-    rxData = rfm.receive(paramChanger.rxLen())
-    rfmlock.release()
+    try:
+        rxData = rfm.receive(paramChanger.rxLen())
+    except Exception as ex:
+        print("RFM receive error:", ex)
+        rxData = None
+    finally:
+        rfmlock.release()
 
     if rxData == None:
         continue
@@ -378,9 +431,10 @@ while 1:
     lock.acquire()
 
     if not id in cache:
-        cache[id] = {"discSent": False, "discTopics": set()}
+        cache[id] = {}
     cache[id]["payload"] = payload
     cache[id]["ts"] = datetime.now()
+    cache[id]["sensor"] = sensor
 
     payload = getCachePayload(id)
 
@@ -393,41 +447,7 @@ while 1:
     }
     apisrv.send(apipayl)
 
-    if mqttClient:
-        discoveryPaths = sensor.getDiscoveryPaths(
-            getTopic(sensor),
-            payload["room"] if "room" in payload else None,
-            nodePrefix = "raspyrfm",
-            deviceIdentifier = "raspyrfm_868gw",
-            deviceName = "RaspyRFM 868gw"
-        )
-        if "discTopics" not in cache[id] or not isinstance(cache[id]["discTopics"], set):
-            cache[id]["discTopics"] = set()
-
-        sentTopics = cache[id]["discTopics"]
-        published = 0
-        for path in discoveryPaths:
-            topic = path.get("topic")
-            payloadData = path.get("payload")
-            if not topic or payloadData is None:
-                continue
-            if topic in sentTopics:
-                continue
-            if (time.time() - start_time) >= 300:
-                continue
-            mqttClient.publish(topic, json.dumps(payloadData), 2, True)
-            sentTopics.add(topic)
-            published += 1
-
-        if published > 0:
-            print("send discovery!")
-            cache[id]["discSent"] = True
-
     lock.release()
-
-    measurement = config["influxdb"]["measurement"] if "measurement" in config["influxdb"] else ""
-    if measurement == "":
-        measurement = sensor.getClass()
 
     vals = sensor.getDbValues()
 
@@ -446,6 +466,10 @@ while 1:
 
     if influxClient:
         try:
+            measurement = config["influxdb"]["measurement"] if "measurement" in config["influxdb"] else ""
+            if measurement == "":
+                measurement = sensor.getClass()
+
             wr = {
                 "measurement": measurement,
                 "fields": {},

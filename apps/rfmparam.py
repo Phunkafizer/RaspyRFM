@@ -18,21 +18,26 @@ class ParamChanger(threading.Thread):
         self.start()
 
     def run(self):
-        global rxlen
         i = 0
         while True:
             self.__event.clear()
-            self.__rfm.receive_stop()
 
             bd = self.__params[i]["baudrate"]
             self.__rxlen = self.__params[i]["rxlen"]
             sync = self.__params[i]["sync"]
 
             print("Switch baudrate to " + str(bd) + " kbit/s")
-            self.__mutex.acquire()
-            self.__rfm.set_params(Datarate = bd)
-            self.__rfm.set_params(SyncPattern = sync)
-            self.__mutex.release()
+            # receive_stop() no-ops if the main loop has passed event.wait() but
+            # not yet entered receive(); retry until the mutex is actually free
+            while True:
+                self.__rfm.receive_stop()
+                if self.__mutex.acquire(timeout=1.0):
+                    break
+            try:
+                self.__rfm.set_params(Datarate = bd)
+                self.__rfm.set_params(SyncPattern = sync)
+            finally:
+                self.__mutex.release()
             self.__event.set()
             time.sleep(self.__params[i]["duration"])
             i += 1
