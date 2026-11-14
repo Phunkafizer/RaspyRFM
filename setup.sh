@@ -81,6 +81,7 @@ Restart=always
 RestartSec=10
 User=$user_name
 WorkingDirectory=$workdir
+Environment=PYTHONUNBUFFERED=1
 ExecStart=$python_exec $app_exec
 StandardOutput=journal
 StandardError=journal
@@ -146,6 +147,13 @@ if [ "$install_868_choice" = "y" ]; then
     install_service "868gw.service" "RaspyRFM 868 MHz gateway" "868gw.py"
 else
     log "Skipping 868 MHz gateway systemd installation"
+fi
+
+install_maxcul_choice="$(ask_yes_no 'Install MAX! CUL gateway (culfw emulation, TCP 2323) as systemd daemon? [y/N] ' "${INSTALL_MAXCUL_SERVICE:-}" )"
+if [ "$install_maxcul_choice" = "y" ]; then
+    install_service "maxcul.service" "RaspyRFM MAX! CUL gateway (culfw emulation, TCP 2323)" "maxcul.py"
+else
+    log "Skipping MAX! CUL gateway systemd installation"
 fi
 
 log "Setup completed successfully"
