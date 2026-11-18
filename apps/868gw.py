@@ -182,7 +182,7 @@ def getCachePayload(id):
         if outPayload:
             payload["Toutside"] = outPayload["T"]
 
-        if ('RH' in payload):    
+        if ('RH' in payload):
             if (outPayload is not None) and ('AH' in outPayload):
                 payload["AHratio"] = round((outPayload["AH"] / payload["AH"] - 1) * 100)
                 payload["RHvent"] = round(outPayload["VP"] / payload["SVP"] * 100)
@@ -345,8 +345,8 @@ class MyHttpRequestHandler(BaseHTTPRequestHandler):
                             getTopic(sensor),
                             room,
                             nodePrefix = "raspyrfm",
-                            deviceIdentifier = "raspyrfm_gateway_868",
-                            deviceName = "RFM Gateway 868"
+                            deviceIdentifier = "raspyrfm_868gw",
+                            deviceName = "RaspyRFM 868gw"
                         )
                         for disc in discoveryPaths:
                             topic = disc.get("topic")

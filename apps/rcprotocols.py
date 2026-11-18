@@ -678,6 +678,68 @@ class Unknown(RcCodec):
 			"code": symbols
 		}
 
+
+class FS20(RcCodec):
+	def __init__(self):
+		self._timebase = 200
+		self._rxq = 2 # rx quality factor q, matching windows s-(s/q) <= x <= s+(s/q)
+		self._footer = [2, 50]
+		self._repetitions = 3
+		self._symbols = {
+			'0': [2, 2],
+			'1': [3, 3],
+		}
+		self._header = []
+		for c in "0000000000001":
+			self._header += self._symbols[c]
+		self._params = [PARAM_HOUSE, PARAM_CHANNEL, PARAM_COMMAND]
+		self._pattern = "0{12}1([01]{45}|[01]{54})"
+		self._commands = {"on": "00010000", "off": "00000000"}
+		self._name = "FS20"
+		self._class = CLASS_RCSWITCH
+		RcCodec.__init__(self)
+
+	def __encode_byte(self, b):
+		b &= 0xFF
+		result = '{:08b}'.format(b)
+		par = 0
+		while b:
+			par ^= 1
+			b &= b-1
+		result += '1' if par != 0 else '0'
+		return result
+
+	def _encode(self, params):
+		id = int(params["house"])
+		symbols = self.__encode_byte((id >> 8))
+		symbols += self.__encode_byte(id & 0xFF)
+		
+		channel = int(params["channel"])
+		symbols += self.__encode_byte(channel)
+
+		if params["command"].lower() in self._commands:
+			command = int(self._commands[params["command"].lower()], 2)
+		else:
+			command = int(params["command"])
+			
+		symbols += self.__encode_byte(command)
+
+		q = 0x06 + (id >> 8) + (id & 0xFF) + channel + command
+		symbols += self.__encode_byte(q)
+		return symbols
+
+	def _decode(self, symbols):
+		return {
+			"code": symbols
+		}
+	
+		symbols, tb, rep = self._decode_symbols(pulsetrain[0:-2])
+		if symbols:
+			id = int(symbols[13:21] + symbols[22:30], 2)
+			unit = int(symbols[31:39], 2) + 1
+			command = int(symbols[40:48], 2)
+			return [id, unit, command], tb, rep
+
 '''
 class RcRaw(RcPulse):
 	def __init__(self, timebase):
@@ -691,54 +753,6 @@ class RcRaw(RcPulse):
 			self._add_pulses([round(p / self._timebase)])
 		self._add_finish()
 		return self._ookdata * repetitions
-
-
-class FS20(RcPulse):
-	def __init__(self):
-		self._name = "fs20"
-		self._timebase = 200
-		self._repetitions = 10
-		self._pattern = "0000000000001[01]{45}"
-		self._symbols = {
-			'0': [2, 2],
-			'1': [3, 3],
-		}
-		self._header = [2, 2] * 12 + [3, 3]
-		self._footer = [1, 100]
-		self._params = [PARAM_ID, PARAM_UNIT, PARAM_COMMAND]
-		self._class = CLASS_RCSWITCH
-		RcPulse.__init__(self)
-
-	def __encode_byte(self, b):
-		b &= 0xFF
-		result = '{:08b}'.format(b)
-		par = 0
-		while b:
-			par ^= 1
-			b &= b-1
-		result += '1' if par != 0 else '0'
-		return result
-
-	def encode(self, params, timebase=None, repetitions=None):
-		symbols = ""
-		id = int(params["id"])
-		unit = int(params["unit"]) - 1
-		command = int(params["command"])
-		symbols += self.__encode_byte((id >> 8))
-		symbols += self.__encode_byte(id)
-		symbols += self.__encode_byte(unit)
-		symbols += self.__encode_byte(command)
-		q = 0x06 + (id >> 8) + (id & 0xFF) + unit + command
-		symbols += self.__encode_byte(q)
-		return self._build_frame(symbols, timebase, repetitions)
-
-	def decode(self, pulsetrain):
-		symbols, tb, rep = self._decode_symbols(pulsetrain[0:-2])
-		if symbols:
-			id = int(symbols[13:21] + symbols[22:30], 2)
-			unit = int(symbols[31:39], 2) + 1
-			command = int(symbols[40:48], 2)
-			return [id, unit, command], tb, rep
 
 class Voltcraft(RcPulse):
 
@@ -1049,11 +1063,11 @@ protocols = [
 	Logilight(),
 	Emylo(),
 	PilotaCasa(),
-	PWM24()
+	PWM24(),
+	FS20(),
 
 	#Voltcraft(),
 	#PCPIR(),
-	#FS20(),
 	#REVRitterShutter(),
 	#WH2(),
 	#WS7000(),
